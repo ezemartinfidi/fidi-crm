@@ -41,7 +41,8 @@
 		"dev:prepare": "bun scripts/prepare-dev.ts",
 		"lint": "biome check .",
 		"postinstall": "prisma generate",
-		"clean": "rm -rf .turbo node_modules src/generated"
+		"clean": "rm -rf .turbo node_modules src/generated",
+		"db:seed:fidi": "bun scripts/require-local-db.ts db:seed:fidi && bun prisma/seed-fidi.ts"
 	},
 	"dependencies": {
 		"@crm/env": "workspace:*",

@@ -70,7 +70,7 @@ export async function listDeals(options: DealListOptions = {}) {
 		status === "open"
 			? [...OPEN_DEAL_STAGES]
 			: status === "won"
-				? [DealStage.CLOSED_WON]
+				? [DealStage.WON]
 				: status === "lost"
 					? [...LOSING_DEAL_STAGES]
 					: null;

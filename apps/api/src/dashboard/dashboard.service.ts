@@ -203,7 +203,7 @@ export class DashboardService {
 
 			const { closedAt, stage } = deal;
 			if (!closedAt) continue;
-			const won = stage === DealStage.CLOSED_WON;
+			const won = stage === DealStage.WON;
 
 			if (won) {
 				const closed = trend[monthKey(closedAt) - firstBucket];
@@ -226,7 +226,7 @@ export class DashboardService {
 					wonCents += cents;
 				}
 				cycleDays += (closedAt.getTime() - deal.createdAt.getTime()) / DAY_MS;
-			} else if (stage === DealStage.CLOSED_LOST) {
+			} else if (stage === DealStage.LOST) {
 				losses += 1;
 			}
 		}

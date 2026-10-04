@@ -224,6 +224,13 @@ export const dealListOutput = z.object({
 
 export type DealListResult = z.infer<typeof dealListOutput>;
 
+/** Los productos que vende un deal. Multi-select en Notion, relacion propia aca. */
+export const dealProductOutput = z.object({
+	id: z.string(),
+	key: z.string(),
+	name: z.string(),
+});
+
 export const dealDetailOutput = z.object({
 	id: z.string(),
 	name: z.string(),
@@ -245,6 +252,7 @@ export const dealDetailOutput = z.object({
 	createdAt: z.string(),
 	archivedAt: z.string().nullable(),
 	contacts: z.array(dealContactOutput),
+	products: z.array(dealProductOutput),
 });
 
 export type DealDetail = z.infer<typeof dealDetailOutput>;

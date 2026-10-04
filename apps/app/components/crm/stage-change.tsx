@@ -147,10 +147,10 @@ export function CloseReasonDialog() {
 			<DialogContent>
 				<DialogHeader>
 					<DialogTitle>
-						{stage === "CLOSED_LOST" ? "Close as lost" : "Mark as unqualified"}
+						{stage === "LOST" ? "Close as lost" : "Mark as unqualified"}
 					</DialogTitle>
 					<DialogDescription>
-						{stage === "CLOSED_LOST"
+						{stage === "LOST"
 							? "What did we lose it to? This is the only place that answer gets recorded."
 							: "Why is this not a fit? It goes on the timeline so nobody re-runs the same deal."}
 					</DialogDescription>

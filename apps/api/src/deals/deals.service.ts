@@ -216,6 +216,12 @@ export class DealsService {
 					select: { role: true, contact: { select: CONTACT_SELECT } },
 					orderBy: { contact: { firstName: "asc" } },
 				},
+				products: {
+					select: {
+						product: { select: { id: true, key: true, name: true } },
+					},
+					orderBy: { product: { position: "asc" } },
+				},
 			},
 		});
 
@@ -225,6 +231,7 @@ export class DealsService {
 
 		const {
 			contacts,
+			products,
 			amount,
 			baseAmount,
 			fxRate,
@@ -247,11 +254,12 @@ export class DealsService {
 			createdAt: deal.createdAt.toISOString(),
 			archivedAt: archivedAt?.toISOString() ?? null,
 			contacts: contacts.map(({ role, contact }) => ({ ...contact, role })),
+			products: products.map(({ product }) => product),
 		};
 	}
 
 	async create(input: DealCreateInput) {
-		const stage = input.stage ?? "DEMO_BOOKED";
+		const stage = input.stage ?? "LEAD";
 		const closed = isClosedStage(stage);
 		const now = new Date();
 

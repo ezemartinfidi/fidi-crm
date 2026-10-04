@@ -168,14 +168,17 @@ model RateLimit {
   @@map("rateLimit")
 }
 
+// Las etapas del pipeline de Fidi, tal como se usan en el equipo comercial.
+// STAND_BY no es abierta ni cerrada: ver PAUSED_DEAL_STAGES en src/deal-stage.ts.
 enum DealStage {
-  DEMO_BOOKED
-  QUALIFIED_TO_BUY
-  UNQUALIFIED_TO_BUY
-  DECISION_MAKER_BOUGHT_IN
-  CONTRACT_SENT
-  CLOSED_WON
-  CLOSED_LOST
+  LEAD
+  QUALIFIED
+  DISCOVERY
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+  STAND_BY
 }
 
 enum ActivityType {
@@ -328,6 +331,11 @@ model Company {
   emailThreads   EmailThread[]
   calendarEvents CalendarEvent[]
   fieldValues    FieldValue[]
+
+  // Identidad de origen para la migracion desde Notion. Es la clave de import
+  // (nunca el titulo), y lo que hace idempotente re-ejecutar el load.
+  notionPageId String? @unique
+
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
@@ -392,6 +400,11 @@ model Contact {
   fieldValues     FieldValue[]
   visitors        TrackedVisitor[]   @relation("VisitorContact")
   submissions     FormSubmission[]   @relation("SubmissionContact")
+
+  // Identidad de origen para la migracion desde Notion. Es la clave de import
+  // (nunca el titulo), y lo que hace idempotente re-ejecutar el load.
+  notionPageId String? @unique
+
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
@@ -923,10 +936,10 @@ model Deal {
   ownerId       String
   owner         User                @relation("DealOwner", fields: [ownerId], references: [id])
 
-  stage             DealStage @default(DEMO_BOOKED)
+  stage             DealStage @default(LEAD)
   stageChangedAt    DateTime  @default(now())
   amount            Decimal?  @db.Decimal(14, 2)
-  currency          String    @default("USD")
+  currency          String    @default("CLP")
   expectedCloseDate DateTime?
   closedAt          DateTime?
   closedReason      String?
@@ -940,8 +953,14 @@ model Deal {
   archivedAt     DateTime?
 
   contacts    DealContact[]
+  products    DealProduct[]
   activities  Activity[]
   fieldValues FieldValue[]
+
+  // Identidad de origen para la migracion desde Notion. Es la clave de import
+  // (nunca el titulo), y lo que hace idempotente re-ejecutar el load.
+  notionPageId String? @unique
+
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -954,6 +973,47 @@ model Deal {
   @@index([currency])
   @@index([archivedAt])
   @@map("deal")
+}
+
+// ─── Catalogo de productos de Fidi ───────────────────────────────────────────
+// La linea de revenue es una columna y no una regla de string-matching sobre el
+// nombre del producto: el modelo v3 la definia como "Producto contiene 'Cuentas
+// Virtuales'", que se rompe al renombrar un producto.
+enum RevenueLine {
+  CUENTAS_VIRTUALES
+  FORWARD_DEPLOYED_ENGINEERS
+  INFRAESTRUCTURA
+}
+
+model Product {
+  id          String      @id @default(cuid())
+  key         String      @unique
+  name        String
+  revenueLine RevenueLine
+  position    Int
+  archivedAt  DateTime?
+
+  deals DealProduct[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([position])
+  @@map("product")
+}
+
+// Un deal puede vender varios productos: en Notion es un multi-select, y el
+// sistema de campos custom no soporta multi-valor (FieldValue tiene un solo
+// optionId y unique por [fieldId, dealId]).
+model DealProduct {
+  dealId    String
+  productId String
+  deal      Deal    @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@id([dealId, productId])
+  @@index([productId])
+  @@map("dealProduct")
 }
 
 enum RateSource {
@@ -1131,6 +1191,11 @@ model Activity {
   emailThread     EmailThread?   @relation(fields: [emailThreadId], references: [id], onDelete: Cascade)
   calendarEventId String?        @unique
   calendarEvent   CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
+
+
+  // Identidad de origen para la migracion desde Notion. Es la clave de import
+  // (nunca el titulo), y lo que hace idempotente re-ejecutar el load.
+  notionPageId String? @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
