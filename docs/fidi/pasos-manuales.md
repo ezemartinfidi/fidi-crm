@@ -28,18 +28,60 @@ que llegó después, o puede ser otra cosa.
 
 ### 2. Node 24 en los proyectos de Vercel
 
-El `package.json` raíz declara `"node": ">=22"`, pero **`eve` exige >=24** y falla el
-build con 22. Está fijado localmente en `.nvmrc`; en Vercel hay que seleccionar Node 24
-en Settings → General → Node.js Version de cada proyecto.
+El `package.json` raíz declara `"node": ">=24"` y `.nvmrc` fija 24.13.1, pero en Vercel
+hay que seleccionarlo a mano: Settings → General → Node.js Version, en cada uno de los
+tres proyectos. **`eve` no compila con 22.**
+
+### 3. El entorno de nube en claude.ai/code
+
+Es lo único que falta para que puedas trabajar desde el teléfono. **No lo puedo crear yo:
+los entornos de nube se configuran solo por UI, no hay comando ni API.** Y aunque la
+hubiera, el `DATABASE_URL` no lo puedo leer: Neon escribe sus variables en Vercel como
+`sensitive`, que es de solo escritura por diseño.
+
+En claude.ai/code → selector de entorno → nuevo entorno sobre `ezemartinfidi/fidi-crm`:
+
+**Network access: `Custom`**, con *"Also include default list of common package
+managers"* **tildado**, y el host de Neon en la lista:
+
+```text
+ep-<tu-endpoint>.sa-east-1.aws.neon.tech
+```
+
+El default es `Trusted`, que solo alcanza registries de paquetes y GitHub. **Neon no está
+en esa lista**, así que sin este paso la app no puede hablar con la base.
+
+**Setup script:** pegar el contenido de `scripts/cloud-setup.sh` de este repo. Instala
+Node 24, que es lo único que la imagen base no trae (viene con 20, 21 y 22). El resultado
+queda en un snapshot cacheado, así que corre una sola vez y no en cada sesión.
+
+**Environment variables:** las mismas que ya están en Vercel. `DATABASE_URL` y
+`DIRECT_DATABASE_URL` tienen que salir de Neon, no de `vercel env pull`, que las devuelve
+vacías por ser `sensitive`.
+
+Las dependencias **no** van acá: las instala `scripts/install-deps.sh` por el hook
+`SessionStart` de `.claude/settings.json`, que ya está commiteado y corre igual en local
+y en la nube.
+
+> **Hay un riesgo conocido en este paso.** La documentación dice que todo el tráfico
+> saliente pasa por un proxy de seguridad y que **bun es un caso conocido de
+> incompatibilidad para bajar paquetes**. Si `bun install` falla en la primera sesión de
+> nube, el hook te lo va a avisar con el error exacto en vez de romper la sesión. Avisame
+> con ese error y lo resolvemos; no lo puedo verificar sin una sesión de nube real.
+
+### 4. La app de GitHub de Claude
+
+Instalarla en `ezemartinfidi/fidi-crm` para que las sesiones de nube puedan clonar y
+pushear. Es un clic en el flujo de creación del entorno.
 
 ## Verificaciones pendientes (fase 0.5)
 
-### 3. Conectores MCP custom en el plan de Claude
+### 5. Conectores MCP custom en el plan de Claude
 
 Confirmar que el plan de Fidi permite conectores MCP custom y que las 5 personas tienen
 Cowork habilitado. Si no, cambia la interfaz entera del proyecto.
 
-### 4. API key de Granola
+### 6. API key de Granola
 
 El endpoint está verificado: `https://public-api.granola.ai/v1/notes` existe y responde
 401 con formato correcto. Falta confirmar que el plan lo permite.
@@ -53,17 +95,17 @@ señales y hay que decidir si Cowork hace de puente (tiene ambos conectores).
 
 ## Decisiones que necesitan tu ojo
 
-### 5. Dominio de `ALLOWED_SIGN_IN`
+### 7. Dominio de `ALLOWED_SIGN_IN`
 
 Está en `"fidi.money,fidi.cl"` porque tu mail de trabajo es `@fidi.money` pero el plan
 hablaba de `fidi.cl`. **Es el modelo de autorización completo**: si sobra uno, sacarlo.
 
-### 6. Cuál GTM Consorcio Targets
+### 8. Cuál GTM Consorcio Targets
 
 Hay dos databases con ese nombre en Notion, con data sources distintos. Mirar cuál vale
 antes de la fase 3. El extract baja las dos igual.
 
-### 7. Notion: marcar obsoletas las versiones viejas
+### 9. Notion: marcar obsoletas las versiones viejas
 
 Para que nadie las lea como vigentes:
 
@@ -73,7 +115,7 @@ Para que nadie las lea como vigentes:
 
 La fuente única es `docs/forecast-model.md` en este repo.
 
-### 8. Token de integración de Notion
+### 10. Token de integración de Notion
 
 Para la fase 3. Crear una integración interna y compartirle las 8 databases del
 teamspace. `NOTION_TOKEN` va **solo en `.env` local, nunca en Vercel**: la extracción
@@ -81,7 +123,7 @@ corre una vez desde tu máquina.
 
 ## Para producción, más adelante
 
-### 9. Google OAuth
+### 11. Google OAuth
 
 **No hace falta para desarrollar.** Para entrar localmente:
 

@@ -20,6 +20,19 @@ compila con 22, aunque upstream declare `>=22`.
 `packages/db/scripts/require-local-db.ts`, que existe justamente para que nadie
 borre producción. **Ese `DATABASE_URL` nunca debe apuntar al branch de producción.**
 
+**La base de tests no tiene por qué ser Neon.** Las sesiones de nube traen
+PostgreSQL 16 preinstalado, apagado por defecto. Levantarlo y apuntar `crm_test`
+a `localhost` es más rápido que ir a Neon en cada test y además satisface el
+guardrail sin `ALLOW_REMOTE_DB=1`, porque efectivamente es local. El snapshot
+cacheado del entorno no conserva procesos corriendo, así que hay que arrancarlo
+por sesión.
+
+**Las dependencias se instalan solas.** `scripts/install-deps.sh` corre por el
+hook `SessionStart` de `.claude/settings.json`, en local y en la nube, al abrir y
+al reanudar. Nunca corta la sesión: si falla, avisa y sigue. El `postinstall` de
+`bun install` además engancha `core.hooksPath .githooks`, así que el hook de
+pre-push que corre la suite queda activo sin hacer nada.
+
 **El motor de forecast es puro.** `packages/forecast` no hace I/O, no llama a
 `Date.now()` y no toca Prisma. Usa `decimal.js`, nunca `number`: el modelo tiene
 redondeos explícitos y acantilados por tramo, y el punto flotante desvía más allá
@@ -56,7 +69,7 @@ import, nunca el título. Es lo que hace idempotente re-ejecutar la migración.
 
 ```bash
 nvm use                                  # 24.13.1
-bun install
+bun install                              # el hook SessionStart ya lo corrio
 bun run db:deploy                        # migraciones
 ALLOW_REMOTE_DB=1 bun run db:seed        # datos de demo
 ALLOW_REMOTE_DB=1 bun run --filter=@crm/db db:seed:fidi   # productos y campos
