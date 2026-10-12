@@ -92,9 +92,32 @@ describe("ramp lineal de Infraestructura", () => {
 		).toBe(TOPE.toString());
 	});
 
-	it("sin meses de ramp arranca directo en el tope", () => {
+	// Antes este test afirmaba que sin Meses de Ramp arrancaba en el tope, que
+	// equivale a no tener ramp. Era un bug: el Excel v4 define una escalera por
+	// defecto para Infra.
+	it("sin meses de ramp aplica la escalera por defecto: 5/5/5 y despues +10pp", () => {
+		const pct = (mes: number) =>
+			rampLineal({ mes, tope: TOPE, mesesDeRamp: null })
+				.dividedBy(TOPE)
+				.toString();
+
+		expect(pct(1)).toBe("0.05");
+		expect(pct(2)).toBe("0.05");
+		expect(pct(3)).toBe("0.05");
+		expect(pct(4)).toBe("0.15");
+		expect(pct(5)).toBe("0.25");
+		expect(pct(12)).toBe("0.95");
+	});
+
+	it("sin meses de ramp llega al 100% en el mes 13 y no lo pasa", () => {
+		// El Excel rotula la regla como "lineal 12m", pero 5/5/5 y +10pp llegan
+		// al tope recien en el 13. Se implementa la regla, no el rotulo; si
+		// EVAL-F1 difiere en un deal de Infra sin Meses de Ramp, empezar por aca.
 		expect(
-			rampLineal({ mes: 1, tope: TOPE, mesesDeRamp: null }).toString(),
+			rampLineal({ mes: 13, tope: TOPE, mesesDeRamp: null }).toString(),
+		).toBe(TOPE.toString());
+		expect(
+			rampLineal({ mes: 40, tope: TOPE, mesesDeRamp: null }).toString(),
 		).toBe(TOPE.toString());
 	});
 });

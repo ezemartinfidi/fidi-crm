@@ -15,37 +15,46 @@ import type { TarifaMethod, TarifaTramo } from "./types";
 
 function tramoFor(
 	tramos: readonly TarifaTramo[],
-	cuentas: number,
+	cuentas: Decimal,
 ): TarifaTramo {
+	// Se elige por el techo, no por el piso. Los tramos estan escritos con
+	// bordes enteros (1-500, 501-1.000), asi que un valor fraccionario como
+	// 500,4 cae en el hueco entre dos tramos y no matchea ninguno. Con cuentas
+	// enteras el bug no existe, y durante el ramp son siempre fraccionarias.
+	// Leido como "hasta este techo inclusive", no hay huecos posibles.
 	const found = tramos.find(
-		(tramo) =>
-			cuentas >= tramo.desde &&
-			(tramo.hasta === null || cuentas <= tramo.hasta),
+		(tramo) => tramo.hasta === null || cuentas.lessThanOrEqualTo(tramo.hasta),
 	);
 	if (!found) {
 		throw new Error(
-			`Ningun tramo de tarifa cubre ${cuentas} cuentas. Los tramos deben cubrir de 1 a infinito sin huecos.`,
+			`Ningun tramo de tarifa cubre ${cuentas.toString()} cuentas. Los tramos deben cubrir de 1 a infinito sin huecos.`,
 		);
 	}
 	return found;
 }
 
-/** El rate que aplica a *cada* cuenta bajo el metodo por volumen. */
+/**
+ * El rate que aplica a *cada* cuenta bajo el metodo por volumen.
+ *
+ * Las cuentas son Decimal y no entero porque durante el ramp son fraccionarias:
+ * el 5% de 347 cuentas son 17,35. Redondear ahi seria una decision de modelo que
+ * la especificacion no toma, y desviaria contra el Excel.
+ */
 export function rateForCuentas(
 	tramos: readonly TarifaTramo[],
-	cuentas: number,
+	cuentas: Decimal,
 ): Decimal {
-	if (cuentas <= 0) return new Decimal(0);
+	if (cuentas.lessThanOrEqualTo(0)) return new Decimal(0);
 	return tramoFor(tramos, cuentas).rateClp;
 }
 
 /** El revenue por cuenta del mes, ya multiplicado por la cantidad de cuentas. */
 export function revenuePorCuenta(
 	tramos: readonly TarifaTramo[],
-	cuentas: number,
+	cuentas: Decimal,
 	method: TarifaMethod,
 ): Decimal {
-	if (cuentas <= 0) return new Decimal(0);
+	if (cuentas.lessThanOrEqualTo(0)) return new Decimal(0);
 
 	if (method === "volumen") {
 		return rateForCuentas(tramos, cuentas).times(cuentas);
@@ -54,11 +63,13 @@ export function revenuePorCuenta(
 	// Marginal: cada tramo cobra su rate solo por las cuentas que caen dentro.
 	let total = new Decimal(0);
 	for (const tramo of tramos) {
-		if (cuentas < tramo.desde) break;
+		if (cuentas.lessThan(tramo.desde)) break;
 		const techo =
-			tramo.hasta === null ? cuentas : Math.min(tramo.hasta, cuentas);
-		const enTramo = techo - tramo.desde + 1;
-		if (enTramo > 0) total = total.plus(tramo.rateClp.times(enTramo));
+			tramo.hasta === null ? cuentas : Decimal.min(tramo.hasta, cuentas);
+		const enTramo = techo.minus(tramo.desde).plus(1);
+		if (enTramo.greaterThan(0)) {
+			total = total.plus(tramo.rateClp.times(enTramo));
+		}
 	}
 	return total;
 }
@@ -66,9 +77,9 @@ export function revenuePorCuenta(
 /** El promedio efectivo por cuenta. Util para comparar los dos metodos. */
 export function rateEfectivo(
 	tramos: readonly TarifaTramo[],
-	cuentas: number,
+	cuentas: Decimal,
 	method: TarifaMethod,
 ): Decimal {
-	if (cuentas <= 0) return new Decimal(0);
+	if (cuentas.lessThanOrEqualTo(0)) return new Decimal(0);
 	return revenuePorCuenta(tramos, cuentas, method).dividedBy(cuentas);
 }

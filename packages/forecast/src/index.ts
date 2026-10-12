@@ -5,13 +5,16 @@
  * Es puro: sin I/O, sin Date.now(), sin Prisma.
  */
 
-/** Se bumpea ante cualquier cambio de comportamiento del calculo. */
-export const ENGINE_VERSION = "0.1.0";
-
+export * from "./aggregate";
+export * from "./components";
+export * from "./deal-input";
+export * from "./engine";
 export * from "./month";
 export * from "./params";
+export * from "./project";
 export * from "./ramp";
 export * from "./revshare";
+export * from "./scenarios";
 export * from "./tarifa";
 export * from "./timing";
 export * from "./types";

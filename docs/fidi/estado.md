@@ -75,9 +75,31 @@ tramo 4 es abierto, > 20.000 M al 35%, con test que falla si alguien reintroduce
 cliff), y el margen bruto de CV queda **como placeholder a propósito**: no hay test que
 fije el 0,70, se testea que siga siendo el complemento del costo variable.
 
-**Falta:** `project.ts`, `scenarios.ts`, `aggregate.ts` y `engine.ts`. Son las piezas
-que solo se pueden escribir contra la salida real del Excel, y EVAL-F1 es la compuerta
-que habilita importar datos.
+**El motor está completo**: `components.ts`, `project.ts`, `scenarios.ts`,
+`aggregate.ts` y `engine.ts`. 76 tests verdes, con EVAL-F2, F4, F5, F6, F7, F8 y F9
+cubiertos.
+
+**Falta EVAL-F1**, que es la compuerta real: reproducir el Excel v4 mes a mes. Para eso
+hay que parsear `test/fixtures/v4-revenue.raw.txt`, que hoy es un volcado CSV en una
+sola línea.
+
+Tres cosas que conviene saber antes de tocar el motor:
+
+**El rev share no se puede calcular por deal.** Se aplica sobre el Saldo Promedio
+Ponderado consolidado de todos los deals del escenario, y no es escalonado. Dos clientes
+de 200 M pagan rev share juntos (400 M pasa el umbral de 300 M) y ninguno por separado.
+Por eso `aggregate.ts` hace dos pasadas y por eso **un escenario no se deriva restando
+otro**.
+
+**Las cuentas son `Decimal`, no entero.** Durante el ramp son fraccionarias: el 5% de
+347 cuentas son 17,35. Eso destapó un bug en la selección de tramo, que usaba los bordes
+enteros (`1-500`, `501-1.000`) y dejaba huecos: 500,4 no caía en ninguno y tiraba
+excepción. Ahora el tramo se elige por el techo.
+
+**`rampLineal()` sin Meses de Ramp llega al 100% en el mes 13, no en el 12.** El Excel
+rotula la regla como "lineal 12m (5/5/5, luego +10pp)" y las dos cosas no cierran. Se
+implementó la regla, no el rótulo. Si EVAL-F1 difiere en un deal de Infra sin Meses de
+Ramp, empezar por ahí.
 
 Los fixtures del Excel v4 ya están en `packages/forecast/test/fixtures/`. Leer la
 sección de hallazgos de [`docs/forecast-model.md`](../forecast-model.md) antes de
