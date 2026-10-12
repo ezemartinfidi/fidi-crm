@@ -23,15 +23,17 @@ model User {
   sessions      Session[]
   accounts      Account[]
 
-  ownedCompanies Company[]           @relation("CompanyOwner")
-  ownedContacts  Contact[]           @relation("ContactOwner")
-  ownedDeals     Deal[]              @relation("DealOwner")
-  activities     Activity[]          @relation("ActivityAuthor")
-  mailboxSyncs   MailboxSync[]
-  factDecisions  ContactFact[]       @relation("FactDecider")
-  conversations  AgentConversation[] @relation("ConversationOwner")
-  fieldValues    FieldValue[]        @relation("FieldValueUser")
-  savedViews     SavedView[]         @relation("SavedViewOwner")
+  ownedCompanies  Company[]           @relation("CompanyOwner")
+  ownedContacts   Contact[]           @relation("ContactOwner")
+  ownedDeals      Deal[]              @relation("DealOwner")
+  activities      Activity[]          @relation("ActivityAuthor")
+  ownedActivities Activity[]          @relation("ActivityOwner")
+  forecastRuns    ForecastRun[]       @relation("ForecastRunAuthor")
+  mailboxSyncs    MailboxSync[]
+  factDecisions   ContactFact[]       @relation("FactDecider")
+  conversations   AgentConversation[] @relation("ConversationOwner")
+  fieldValues     FieldValue[]        @relation("FieldValueUser")
+  savedViews      SavedView[]         @relation("SavedViewOwner")
 
   createdAgentDefinitions AgentDefinition[]             @relation("AgentDefinitionCreator")
   createdAgentVersions    AgentVersion[]                @relation("AgentVersionCreator")
@@ -336,8 +338,8 @@ model Company {
   // (nunca el titulo), y lo que hace idempotente re-ejecutar el load.
   notionPageId String? @unique
 
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([domain], map: "company_domain_active_key", where: { archivedAt: null })
   @@index([ownerId])
@@ -405,8 +407,8 @@ model Contact {
   // (nunca el titulo), y lo que hace idempotente re-ejecutar el load.
   notionPageId String? @unique
 
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([email], map: "contact_email_active_key", where: { archivedAt: null })
   @@index([companyId])
@@ -952,17 +954,19 @@ model Deal {
   lastActivityAt DateTime?
   archivedAt     DateTime?
 
-  contacts    DealContact[]
-  products    DealProduct[]
-  activities  Activity[]
-  fieldValues FieldValue[]
+  contacts      DealContact[]
+  products      DealProduct[]
+  activities    Activity[]
+  fieldValues   FieldValue[]
+  forecastInput DealForecastInput?
+  forecastRuns  ForecastRunDeal[]
 
   // Identidad de origen para la migracion desde Notion. Es la clave de import
   // (nunca el titulo), y lo que hace idempotente re-ejecutar el load.
   notionPageId String? @unique
 
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([companyId])
   @@index([ownerId])
@@ -993,7 +997,8 @@ model Product {
   position    Int
   archivedAt  DateTime?
 
-  deals DealProduct[]
+  deals         DealProduct[]
+  forecastRules ForecastProductRule[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1014,6 +1019,271 @@ model DealProduct {
   @@id([dealId, productId])
   @@index([productId])
   @@map("dealProduct")
+}
+
+/// Como se combina el minimo mensual con la porcion variable por cuenta.
+enum RecurringRule {
+  /// max(minimo, variable). El tipico de Cuentas Virtuales.
+  PISO
+  /// minimo + variable. El tipico de Infraestructura.
+  ADITIVO
+}
+
+enum ForecastCategory {
+  COMMIT
+  BEST_CASE
+  PIPELINE
+  OMITIR
+}
+
+enum ForecastScenario {
+  LIVE
+  COMMIT
+  BEST_CASE
+  QUALIFIED
+}
+
+enum ForecastParameterSetStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+/// Los inputs economicos de un deal, los que el motor lee en cada corrida.
+///
+/// Tabla aparte y no columnas en Deal por dos razones. Mantiene la superficie
+/// del fork en una sola linea de relacion, y hace que "sin fila" signifique
+/// **no modelado** en vez de modelado en cero, que son cosas distintas cuando
+/// se suma un escenario.
+///
+/// `expectedCloseDate` no se duplica: vive en Deal y es el ancla de todo el
+/// timing.
+model DealForecastInput {
+  dealId String @id
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  forecastCategory ForecastCategory?
+  recurringRule    RecurringRule?
+
+  /// El tope del ramp de cuentas.
+  cuentasRegimen   Int?
+  /// El tope del ramp de saldo, para el rev share sobre float.
+  saldoVistaMaxClp Decimal? @db.Decimal(20, 2)
+  /// Acota la duracion de los ramps, tanto de CV como de Infra.
+  mesesDeRamp      Int?
+
+  minimoMensualClp Decimal? @db.Decimal(18, 2)
+  setupFeeClp      Decimal? @db.Decimal(18, 2)
+  mesesDeSetup     Int?
+
+  /// SSPP, servicios profesionales. Monto mensual fijo.
+  mrrFijoClp   Decimal? @db.Decimal(18, 2)
+  /// Null con mrrFijoClp cargado significa permanente, no cero.
+  mrrFijoMeses Int?
+
+  finContrato DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([forecastCategory])
+  @@map("dealForecastInput")
+}
+
+/// Un juego de parametros del modelo, versionado y con checksum.
+///
+/// Los escalares van en `payload` validado por zod; los tramos y la matriz
+/// producto x componente son tablas hijas porque se editan y se diffean entre
+/// versiones, y en JSON eso es ilegible.
+model ForecastParameterSet {
+  id      String                     @id @default(cuid())
+  version String                     @unique
+  status  ForecastParameterSetStatus @default(DRAFT)
+  notes   String?
+
+  payload  Json
+  /// Hash canonico del set. Dos corridas son comparables solo si coincide.
+  checksum String
+
+  tarifaTramos       ForecastTarifaTramo[]
+  revShareTramos     ForecastRevShareTramo[]
+  productRules       ForecastProductRule[]
+  stageProbabilities ForecastStageProbability[]
+  runs               ForecastRun[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@map("forecastParameterSet")
+}
+
+model ForecastTarifaTramo {
+  id             String               @id @default(cuid())
+  parameterSetId String
+  parameterSet   ForecastParameterSet @relation(fields: [parameterSetId], references: [id], onDelete: Cascade)
+
+  desde   Int
+  /// Null = sin techo. El ultimo tramo siempre lo es.
+  hasta   Int?
+  rateClp Decimal @db.Decimal(12, 4)
+
+  @@unique([parameterSetId, desde])
+  @@map("forecastTarifaTramo")
+}
+
+model ForecastRevShareTramo {
+  id             String               @id @default(cuid())
+  parameterSetId String
+  parameterSet   ForecastParameterSet @relation(fields: [parameterSetId], references: [id], onDelete: Cascade)
+
+  desdeClp Decimal  @db.Decimal(20, 2)
+  /// Null = sin techo. No hay cliff arriba del ultimo tramo.
+  hastaClp Decimal? @db.Decimal(20, 2)
+  pctTpm   Decimal  @db.Decimal(6, 4)
+
+  @@unique([parameterSetId, desdeClp])
+  @@map("forecastRevShareTramo")
+}
+
+/// Que componentes cobra cada producto. Reemplaza el string matching sobre el
+/// nombre del producto, que se rompe al renombrarlo.
+model ForecastProductRule {
+  id             String               @id @default(cuid())
+  parameterSetId String
+  parameterSet   ForecastParameterSet @relation(fields: [parameterSetId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  cobraSetup     Boolean       @default(true)
+  cobraMinimo    Boolean       @default(true)
+  cobraPorCuenta Boolean       @default(false)
+  cobraFloat     Boolean       @default(false)
+  cobraMrrFijo   Boolean       @default(true)
+  modo           RecurringRule @default(ADITIVO)
+
+  /// El margen bruto del componente recurrente de este producto.
+  margenBruto Decimal? @db.Decimal(6, 4)
+
+  @@unique([parameterSetId, productId])
+  @@index([productId])
+  @@map("forecastProductRule")
+}
+
+/// Probabilidad por etapa, para el pipeline ponderado.
+///
+/// **No la usan los escenarios**, que son categoricos y acumulativos. Son dos
+/// vistas distintas y se mantienen separadas para que nadie descuente dos veces.
+model ForecastStageProbability {
+  id             String               @id @default(cuid())
+  parameterSetId String
+  parameterSet   ForecastParameterSet @relation(fields: [parameterSetId], references: [id], onDelete: Cascade)
+
+  stage        DealStage
+  probabilidad Decimal   @db.Decimal(5, 4)
+
+  @@unique([parameterSetId, stage])
+  @@map("forecastStageProbability")
+}
+
+/// Un forecast congelado. Las celdas son inmutables: esa es la garantia.
+///
+/// La proyeccion se calcula on-demand (90 deals x 29 meses es aritmetica en
+/// microsegundos) y solo se materializa cuando alguien congela: cierre de mes,
+/// deck de directorio.
+model ForecastRun {
+  id             String               @id @default(cuid())
+  parameterSetId String
+  parameterSet   ForecastParameterSet @relation(fields: [parameterSetId], references: [id], onDelete: Restrict)
+
+  label          String?
+  /// El `asOf` con el que se corrio. El motor es puro: nunca lee el reloj.
+  asOf           DateTime
+  mes1           String
+  horizonteMeses Int
+
+  /// Con que se produjo. Sin esto un snapshot viejo es un numero sin contexto.
+  engineVersion        String
+  parameterSetChecksum String
+
+  createdById String?
+  createdBy   User?   @relation("ForecastRunAuthor", fields: [createdById], references: [id])
+
+  deals ForecastRunDeal[]
+  cells ForecastCell[]
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("forecastRun")
+}
+
+/// Que deals entraron a la corrida y con que piso de escenario.
+///
+/// El escenario vive aca y no en la celda. Son supersets acumulativos, asi que
+/// meterlos en las celdas guardaria cuatro veces lo mismo (~52.000 filas por
+/// corrida en vez de ~13.000), y la regla anti doble conteo se aplica una sola
+/// vez, al asignar el piso.
+model ForecastRunDeal {
+  id     String      @id @default(cuid())
+  runId  String
+  run    ForecastRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  dealId String
+  deal   Deal        @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  scenarioFloor ForecastScenario
+  mrrDeRegimen  Decimal?         @db.Decimal(18, 2)
+
+  @@unique([runId, dealId])
+  @@index([dealId])
+  @@map("forecastRunDeal")
+}
+
+/// Una celda mensual agregada de una corrida. Inmutable.
+model ForecastCell {
+  id    String      @id @default(cuid())
+  runId String
+  run   ForecastRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  scenario   ForecastScenario
+  /// Indice absoluto de mes: año x 12 + (mes - 1).
+  monthIndex Int
+  monthKey   String
+
+  setup          Decimal @db.Decimal(20, 2)
+  recurrente     Decimal @db.Decimal(20, 2)
+  float          Decimal @db.Decimal(20, 2)
+  total          Decimal @db.Decimal(20, 2)
+  /// El SPP consolidado que produjo ese float. Es lo que hace auditable el
+  /// rev share, que no se puede recalcular mirando un deal solo.
+  sppConsolidado Decimal @db.Decimal(24, 2)
+  cuentas        Decimal @db.Decimal(18, 4)
+
+  @@unique([runId, scenario, monthIndex])
+  @@index([runId, scenario])
+  @@map("forecastCell")
+}
+
+/// El estado de seguimiento de una tarea: cuanto se insistio y hasta cuando
+/// esta pospuesta.
+///
+/// Tabla lateral y no columnas en Activity porque la mayoria de las
+/// actividades no son tareas y nunca van a tener nudge.
+model ActivityNudge {
+  activityId String   @id
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  /// 0 ninguno, 1 owner, 2 canal, 3 digest.
+  escalationLevel Int       @default(0)
+  lastNudgedAt    DateTime?
+  snoozedUntil    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([snoozedUntil])
+  @@index([escalationLevel])
+  @@map("activityNudge")
 }
 
 enum RateSource {
@@ -1185,13 +1455,19 @@ model Activity {
 
   createdById String
   createdBy   User   @relation("ActivityAuthor", fields: [createdById], references: [id])
-  meta        Json?
+
+  /// A quien le toca la tarea, que no es lo mismo que quien la creo. Upstream
+  /// solo tenia createdById, y sin esta columna no hay a quien escalarle.
+  ownerId String?
+  owner   User?   @relation("ActivityOwner", fields: [ownerId], references: [id])
+
+  nudge ActivityNudge?
+  meta  Json?
 
   emailThreadId   String?        @unique
   emailThread     EmailThread?   @relation(fields: [emailThreadId], references: [id], onDelete: Cascade)
   calendarEventId String?        @unique
   calendarEvent   CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
-
 
   // Identidad de origen para la migracion desde Notion. Es la clave de import
   // (nunca el titulo), y lo que hace idempotente re-ejecutar el load.
@@ -1205,6 +1481,7 @@ model Activity {
   @@index([contactId, createdAt])
   @@index([dueAt])
   @@index([createdById])
+  @@index([ownerId, dueAt])
   @@map("activity")
 }
 
