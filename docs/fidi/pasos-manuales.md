@@ -21,6 +21,21 @@ archivos. Ordenado por lo que bloquea antes.
 
 ## Bloqueantes
 
+### 0. La pregunta para Pancho que destraba EVAL-F1
+
+**¿El Mínimo Mensual rampa, o se factura completo desde el go-live?**
+
+La especificación dice que se factura completo y que ramparlo es un error. El Excel v4
+lo rampa, al menos en Infraestructura. Correr EVAL-F1 mostró que es la única diferencia
+estructural que queda: 59 de 122 oportunidades ya reproducen el Excel exacto, 17 más
+están dentro del 0,2%, y las 46 restantes difieren solo por esto.
+
+La diferencia es material: en un deal de 2.000.000 de mínimo, el primer mes son 100.000
+contra 2.000.000.
+
+Detalle completo en `docs/forecast-model.md`, sección "El Excel rampa el mínimo".
+
+
 ### 1. El entorno de nube en claude.ai/code
 
 **La base ya está lista.** El 12-oct-26 se creó el branch `dev` de Neon, se aplicaron las

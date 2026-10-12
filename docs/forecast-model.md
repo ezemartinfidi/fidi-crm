@@ -277,6 +277,36 @@ Consecuencia para los evals: **EVAL-F3 cambia de sentido.** Estaba especificado 
 "falla si alguien reintroduce 0,65"; eso ya no aplica, porque 0,65 es tan placeholder
 como 0,70. Pasa a verificar la relación de coherencia, no el número.
 
+## El Excel rampa el mínimo, y la especificación dice que no
+
+Esto salió de correr EVAL-F1 por primera vez (12-oct-26) y es la diferencia más
+importante entre el motor y el Excel.
+
+De las 122 oportunidades comparables: **59 reproducen el Excel exacto**, 17 caen dentro
+del 0,2% de tolerancia (redondeo), y **46 difieren estructuralmente**.
+
+Las 46 tienen un patrón único. El peor caso desvía exactamente **1900%**, o sea que el
+Excel vale el 5% de lo que calcula el motor. Esos deals **no tienen Cuentas Régimen**,
+así que no hay componente variable que pueda rampar: lo único que el Excel puede estar
+rampando es **el Mínimo Mensual**.
+
+Y eso es exactamente lo que esta especificación prohíbe:
+
+> El Mínimo Mensual se factura completo desde el go-live. Solo la porción variable
+> rampa. **Rampar también el mínimo es el error que esta regla corrige.**
+
+**Las dos cosas no pueden ser ciertas.** O la regla mínimo-floor aplica solo a Cuentas
+Virtuales y el Excel tiene razón para Infraestructura, o el Excel tiene el bug que la
+regla vino a corregir y esos 46 deals están mal en el modelo de agosto.
+
+**No se tocó el motor para que imite al Excel.** Hacerlo sería dar por válida la regla
+que esta especificación declara errónea, y la diferencia es material: en un deal de
+2.000.000 de mínimo, el primer mes son 100.000 contra 2.000.000.
+
+**Pregunta para Pancho, y es la que destraba EVAL-F1.** Hasta que se responda, EVAL-F1
+no es compuerta: `eval-f1.spec.ts` fija el piso de 59 exactos y el techo de 46
+estructurales, para que el motor no se degrade sin que nadie lo note.
+
 ## 4. D8 tiene respuesta, y no es "vacío"
 
 `mrr_fijo` es **SSPP = Servicios Profesionales**:
