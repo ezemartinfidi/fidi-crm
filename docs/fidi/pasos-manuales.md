@@ -12,6 +12,7 @@ archivos. Ordenado por lo que bloquea antes.
 - ~~**El repo en iCloud**~~ — movido a `~/dev/fidi-crm`.
 - ~~**Node 24 en Vercel**~~ — ya estaba. Verificado por API el 12-oct-26: los tres
   proyectos en `24.x`.
+- ~~**Branch `dev` de Neon, migraciones y seed**~~ — hecho el 12-oct-26. Ver paso 1.
 - ~~**Conectores MCP custom en el plan de Claude**~~ — confirmado por Ezequiel.
 - ~~**Tramo 5 del rev share**~~ — no existe. El tramo 4 (> 20.000 M al 35%) es el último
   y es abierto.
@@ -22,40 +23,57 @@ archivos. Ordenado por lo que bloquea antes.
 
 ### 1. El entorno de nube en claude.ai/code
 
-Es lo único que falta para que puedas trabajar desde el teléfono. **No lo puedo crear yo:
-los entornos de nube se configuran solo por UI, no hay comando ni API.** Y aunque la
-hubiera, el `DATABASE_URL` no lo puedo leer: Neon escribe sus variables en Vercel como
-`sensitive`, que es de solo escritura por diseño.
+**La base ya está lista.** El 12-oct-26 se creó el branch `dev` de Neon, se aplicaron las
+57 migraciones y se cargaron los datos de referencia de Fidi. No hay nada que hacer del
+lado de la base.
 
-En claude.ai/code → selector de entorno → nuevo entorno sobre `ezemartinfidi/fidi-crm`:
+| | |
+|---|---|
+| Proyecto Neon | `sweet-cherry-79933523` (`fidi-crm-neon`), org `org-crimson-bread-43210851` |
+| Branch dev | `br-icy-cloud-b7087fbb`, endpoint `ep-morning-sound-b7vf9l7f` |
+| Branch producción | `br-green-lake-b78fo35x`, endpoint `ep-solitary-union-b7993m9y` |
+| Región | **us-east-1** |
+| Bases en dev | `neondb` (la app) y `crm_test` (la suite), las dos migradas |
+| Cargado en `neondb` | 6 productos, 18 campos de deal, 39 opciones |
 
-**Network access: `Custom`**, con *"Also include default list of common package
-managers"* **tildado**, y el host de Neon en la lista:
+**Lo que no puedo hacer yo**, porque es un flujo de OAuth por UI. En claude.ai/code →
+selector de entorno → **New environment**:
 
-```text
-ep-<tu-endpoint>.sa-east-1.aws.neon.tech
+| Campo | Valor |
+|---|---|
+| Repository | `ezemartinfidi/fidi-crm` |
+| Branch | `fase-1/fidi-core` |
+| Network access | **Custom** |
+| → Allowed domains | `*.c-13.us-east-1.aws.neon.tech` |
+| → Checkbox | ✅ **"Also include default list of common package managers"** |
+| Setup script | el contenido de `scripts/cloud-setup.sh` |
+
+El comodín en Allowed domains es a propósito: cada branch de Neon tiene su propio
+endpoint, así que un host fijo se rompe la próxima vez que creemos uno. Si preferís
+cerrarlo, el host exacto de dev es
+`ep-morning-sound-b7vf9l7f.c-13.us-east-1.aws.neon.tech`.
+
+Si no tildás el checkbox de package managers, `bun install` no llega al registry.
+
+**Environment variables.** Las dos de Neon apuntan al branch `dev`, nunca a producción.
+Pedímelas y te las paso, o sacalas con el MCP de Neon.
+
+```
+DATABASE_URL=<pooled de dev, base neondb>
+DIRECT_DATABASE_URL=<unpooled de dev, base neondb>
+BETTER_AUTH_SECRET=<el mismo de los proyectos de Vercel>
+AGENT_BRIDGE_SECRET=<ídem>
+ALLOWED_SIGN_IN=fidi.money
+CRM_TELEMETRY_DISABLED=1
+NODE_ENV=development
 ```
 
-El default es `Trusted`, que solo alcanza registries de paquetes y GitHub. **Neon no está
-en esa lista**, así que sin este paso la app no puede hablar con la base.
+Al lanzar la sesión, habilitá los conectores de **Notion** y **Granola**. No necesitan
+credenciales.
 
-**Setup script:** pegar el contenido de `scripts/cloud-setup.sh` de este repo. Instala
-Node 24, que es lo único que la imagen base no trae (viene con 20, 21 y 22). El resultado
-queda en un snapshot cacheado, así que corre una sola vez y no en cada sesión.
-
-**Environment variables:** las mismas que ya están en Vercel. `DATABASE_URL` y
-`DIRECT_DATABASE_URL` tienen que salir de Neon, no de `vercel env pull`, que las devuelve
-vacías por ser `sensitive`.
-
-Las dependencias **no** van acá: las instala `scripts/install-deps.sh` por el hook
-`SessionStart` de `.claude/settings.json`, que ya está commiteado y corre igual en local
-y en la nube.
-
-> **Hay un riesgo conocido en este paso.** La documentación dice que todo el tráfico
-> saliente pasa por un proxy de seguridad y que **bun es un caso conocido de
-> incompatibilidad para bajar paquetes**. Si `bun install` falla en la primera sesión de
-> nube, el hook te lo va a avisar con el error exacto en vez de romper la sesión. Avisame
-> con ese error y lo resolvemos; no lo puedo verificar sin una sesión de nube real.
+> **Latencia.** Aplicar las migraciones desde Chile contra us-east-1 tardó 1m52s. Es
+> ida y vuelta de red, no trabajo real. Desde la VM de la sesión de nube debería ser
+> mucho menos, y medirlo es parte de la primera tarea.
 
 ### 2. La app de GitHub de Claude
 

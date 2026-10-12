@@ -25,6 +25,20 @@ cherry-pickear fixes de seguridad.
   se puede hacer con este plan. La alternativa sin costo es una routine de Claude Code
   que lea por MCP: ver `pasos-manuales.md` paso 3
 
+## Base de datos ✅ lista en Neon
+
+Branch `dev` (`br-icy-cloud-b7087fbb`) del proyecto `sweet-cherry-79933523`, en
+us-east-1. Las 57 migraciones aplicadas y los datos de referencia de Fidi cargados: 6
+productos, 18 campos de deal, 39 opciones. La base `crm_test` del mismo branch también
+está migrada.
+
+**El branch de producción (`br-green-lake-b78fo35x`) está vacío**: solo tiene las tablas
+de `neon_auth` que creó Neon. Las migraciones nunca corrieron ahí, así que no hay datos
+en riesgo todavía.
+
+No se cargó el seed de demo de upstream a propósito: son empresas y deals ficticios que
+habría que limpiar antes de importar Notion.
+
 ## Fase 1 — Fidi-ficación del core ✅
 
 | Qué | Dónde |
