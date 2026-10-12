@@ -103,13 +103,15 @@ export const V3_PARAMS_INPUT: ForecastParamsInput = {
 	],
 
 	revShareUmbralMinimoClp: "300000000",
+	// Cuatro tramos, no cinco. El "tramo 5" que el Excel v4 ponia en 0% arriba de
+	// 40.000 M no existe (Ezequiel, 12-oct-26): el 35% es el ultimo tramo y es
+	// abierto. Antes esto se modelaba como dos filas de 35% contiguas, que daba
+	// exactamente lo mismo pero dejaba viva la pregunta del cliff.
 	revShareTramos: [
 		{ desdeClp: "300000000", hastaClp: "2000000000", pctTpm: "0.20" },
 		{ desdeClp: "2000000000", hastaClp: "5000000000", pctTpm: "0.25" },
 		{ desdeClp: "5000000000", hastaClp: "20000000000", pctTpm: "0.30" },
-		{ desdeClp: "20000000000", hastaClp: "40000000000", pctTpm: "0.35" },
-		// Sin cliff: el ultimo tramo se mantiene (correccion Pancho 12-ago-26).
-		{ desdeClp: "40000000000", hastaClp: null, pctTpm: "0.35" },
+		{ desdeClp: "20000000000", hastaClp: null, pctTpm: "0.35" },
 	],
 
 	costoPctRevenueVariable: "0.30",
@@ -123,8 +125,13 @@ export const V3_PARAMS_INPUT: ForecastParamsInput = {
 		infraRecurrente: "0.65",
 		setup: "0.40",
 		forwardDeployedEngineers: "0.40",
-		// 70%, no 65%: gana la regla de costo variable del 11-ago-26 (D12).
+		// PLACEHOLDER (Ezequiel, 12-oct-26). 0.70 es el complemento de
+		// costoPctRevenueVariable (regla del 11-ago), asi que es el valor
+		// coherente mientras no haya uno definitivo, pero no esta decidido: la
+		// guia del 8-ago marca el margen de CV como pendiente de definir.
+		// No escribir un test que fije este numero como si fuera una regla.
 		cvFee: "0.70",
+		// PLACEHOLDER tambien, por la misma guia del 8-ago.
 		float: "0.95",
 	},
 };

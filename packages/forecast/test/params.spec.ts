@@ -15,13 +15,23 @@ describe("los parametros v3", () => {
 		expect(V3_PARAMS.costoPctRevenueVariable.toString()).toBe("0.3");
 	});
 
-	it("resuelven la contradiccion del margen de CV a favor del 70% (D12)", () => {
-		expect(V3_PARAMS.margenesBrutos.cvFee.toString()).toBe("0.7");
+	// El margen de CV es un PLACEHOLDER, no una decision. Por eso este test fija
+	// la relacion que lo hace coherente y no el numero: mientras el margen sea el
+	// complemento del costo variable, el componente cierra. Cuando se defina el
+	// valor real, lo que tiene que seguir pasando es esto, no que siga en 0,7.
+	it("mantienen el margen de CV coherente con el costo variable", () => {
 		expect(
 			V3_PARAMS.costoPctRevenueVariable
 				.plus(V3_PARAMS.margenesBrutos.cvFee)
 				.toString(),
 		).toBe("1");
+	});
+
+	it("tienen cuatro tramos de rev share y el ultimo es abierto", () => {
+		const tramos = V3_PARAMS.revShareTramos;
+		expect(tramos).toHaveLength(4);
+		expect(tramos.at(-1)?.hastaClp).toBeNull();
+		expect(tramos.at(-1)?.pctTpm.toString()).toBe("0.35");
 	});
 
 	it("cubren los tramos de tarifa de 1 a infinito, sin huecos ni solapes", () => {

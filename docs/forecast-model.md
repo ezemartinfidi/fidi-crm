@@ -16,10 +16,11 @@ v3 gana porque las tres diferencias con julio son correcciones fechadas y con ca
 |---|---|---|---|
 | TPM anual 4,75% → **4,5%** | 12-ago-26 | Ezequiel | Actualización de la tasa |
 | Tramo 5 de rev share: 0% → **35%** | 12-ago-26 | Pancho | No hay cliff; se mantiene el último tramo |
+| Tramo 5 de rev share: **eliminado** | 12-oct-26 | Ezequiel | No existe. El tramo 4 (> 20.000 M, 35%) es el último y es abierto |
 | Costo variable: escalones → **30% del revenue variable** | 11-ago-26 | Pancho | La regla vieja, a más de 100k cuentas, daba un costo por cuenta mayor que la tarifa (61 → 46 CLP) y **márgenes negativos**. Detectado en la auditoría del Master P&L Ago-26 |
 
 **Criterio de aceptación:** el motor reproduce `Fidi_Revenue_Model_v4_Notion.xlsx`.
-Leer antes la sección de hallazgos al final: hay dos parámetros en los que ese Excel y
+Leer antes la sección de hallazgos al final: queda **un** parámetro en el que ese Excel y
 Notion difieren.
 
 ---
@@ -75,8 +76,10 @@ rev_share_mes = SPP × (TPM / 12) × pct_tramo
 | 1 | 300 M – 2.000 M | 20% TPM |
 | 2 | 2.000 M – 5.000 M | 25% TPM |
 | 3 | 5.000 M – 20.000 M | 30% TPM |
-| 4 | 20.000 M – 40.000 M | 35% TPM |
-| 5 | > 40.000 M | **35% TPM** (sin cliff) |
+| 4 | > 20.000 M | 35% TPM, **abierto** |
+
+No hay tramo 5. El 0% que el Excel v4 pone arriba de 40.000 M no existe (Ezequiel,
+12-oct-26): el último tramo no tiene techo y no hay cliff.
 
 ## Ramps
 
@@ -144,8 +147,8 @@ cobra por cuenta (CV e Infraestructura).
 | Infra recurrente | 65% |
 | Setup | 40% |
 | Forward Deployed Engineers | 40% |
-| CV fee (componente por cuenta) | **70%** (ver hallazgo 3) |
-| Float | 95% |
+| CV fee (componente por cuenta) | **70%** ⚠ placeholder (ver hallazgo 3) |
+| Float | 95% ⚠ placeholder |
 
 El **OPEX fijo** (~65 M/mes) es una línea de breakeven aparte y **no se prorratea por
 deal**.
@@ -203,10 +206,11 @@ Dos métricas distintas, las dos se mantienen, **nunca en la misma serie de un g
 
 ---
 
-# ⚠ Hallazgos posteriores — pendientes de decisión
+# ⚠ Hallazgos posteriores
 
 Al buscar el Excel apareció material que no estaba disponible cuando se congeló esta
-especificación. Nada de esto está aplicado todavía.
+especificación. Los hallazgos 1 (parcial) y 3 ya están resueltos y aplicados al código;
+el resto sigue pendiente.
 
 ## El archivo existe, con otro nombre
 
@@ -226,15 +230,21 @@ Los fixtures están en `packages/forecast/test/fixtures/`.
 Notion se editó el 12-ago, un día después del Excel, con dos cambios que el Excel no
 tiene:
 
-| | Excel v4 (11-ago) | Notion (12-ago) |
-|---|---|---|
-| TPM anual | 4,75% | 4,5% |
-| Rev share tramo 5 | 0% (cliff, *"confirmado por la página de Supuestos"*) | 35% (*"corrección Pancho, no hay cliff"*) |
+| | Excel v4 (11-ago) | Notion (12-ago) | Resuelto |
+|---|---|---|---|
+| TPM anual | 4,75% | 4,5% | Pendiente |
+| Rev share tramo 5 | 0% (cliff) | 35% (sin cliff) | ✅ **No existe el tramo 5** |
 
-**Reabre D2.** Validar contra el Excel exige un parameter set `v4-excel` además del de
-producción. Es la opción de "dos sets" que se descartó, pero por otro motivo: no para
-reproducir julio, sino porque la única salida legible por máquina se calculó un día
-antes de que cambiaran dos parámetros.
+**El tramo 5 está cerrado** (Ezequiel, 12-oct-26): no es que valga 0% ni 35%, es que no
+existe. El último tramo es `20.000 M → ∞ al 35%`, abierto. En el código esto se modelaba
+antes como dos filas contiguas de 35%, que daba el mismo número pero dejaba viva la
+pregunta; ahora es una sola fila y `revshare.spec.ts` tiene un test que falla si alguien
+reintroduce el cliff leyendo el Excel.
+
+**Queda la TPM.** Sigue siendo la única diferencia real entre el Excel y producción, así
+que EVAL-F1 va a necesitar correr con `tpmAnual: 4,75%` para reproducir el Excel, y
+producción queda en 4,5%. Es un override de un escalar en el parameter set, no un
+segundo set completo.
 
 ## 2. La "tercera versión contradictoria" del ramp no existía
 
@@ -247,15 +257,25 @@ La rampa lineal de 12 meses es el ramp de **Infraestructura**, no una versión v
 de CV. Coexisten. **`rampLineal()` está incompleto:** hoy devuelve el tope cuando no hay
 Meses de Ramp, y debería aplicar 5/5/5 y después +10pp.
 
-## 3. D12 probablemente era un conflicto falso
+## 3. D12 era un conflicto falso, y el margen sigue sin definir ✅ resuelto como placeholder
 
 El Excel v4 tiene las dos cosas, en secciones distintas: `F · MÁRGENES BRUTOS` da CV
 fee 65% y Float 95%; `E · COSTO VARIABLE POR ESCALONES` da 91,4 CLP/cuenta ×0,9 cada
 400k, etiquetado *"informativo, para el P&L"*.
 
-Y la guía del 8-ago dice que los márgenes de CV (65%) y Float (95%) **son
-placeholders**: *"definirlos antes de montar el P&L"*. Así que el 65% no es una regla
-vieja sino un valor sin definir. **Pregunta para Pancho.**
+La guía del 8-ago dice que los márgenes de CV (65%) y Float (95%) **son placeholders**:
+*"definirlos antes de montar el P&L"*.
+
+**Decisión (Ezequiel, 12-oct-26): quedan como placeholders.** No se cierra D12. El
+código usa `cvFee: 0.70` porque es el complemento de `costoPctRevenueVariable: 0.30` y
+por lo tanto el único valor que hace cerrar el componente, pero está marcado como
+placeholder en `params.ts` y **no hay ningún test que fije el 0,70**. Lo que sí se
+testea es la relación: `costoPctRevenueVariable + cvFee = 1`. Cuando llegue el valor
+real, eso es lo que tiene que seguir cumpliéndose.
+
+Consecuencia para los evals: **EVAL-F3 cambia de sentido.** Estaba especificado como
+"falla si alguien reintroduce 0,65"; eso ya no aplica, porque 0,65 es tan placeholder
+como 0,70. Pasa a verificar la relación de coherencia, no el número.
 
 ## 4. D8 tiene respuesta, y no es "vacío"
 

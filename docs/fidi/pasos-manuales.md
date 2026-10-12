@@ -10,29 +10,17 @@ archivos. Ordenado por lo que bloquea antes.
 - ~~**Encontrar el Excel del modelo**~~ — es `Fidi_Revenue_Model_v4_Notion.xlsx`,
   ya está exportado en `packages/forecast/test/fixtures/`.
 - ~~**El repo en iCloud**~~ — movido a `~/dev/fidi-crm`.
+- ~~**Node 24 en Vercel**~~ — ya estaba. Verificado por API el 12-oct-26: los tres
+  proyectos en `24.x`.
+- ~~**Conectores MCP custom en el plan de Claude**~~ — confirmado por Ezequiel.
+- ~~**Tramo 5 del rev share**~~ — no existe. El tramo 4 (> 20.000 M al 35%) es el último
+  y es abierto.
+- ~~**Margen bruto de Cuentas Virtuales**~~ — queda como placeholder, a propósito. No
+  hay test que fije el 0,70; se testea la relación con el costo variable.
 
 ## Bloqueantes
 
-### 1. Las dos preguntas para Pancho
-
-Son las únicas que frenan la fase 2, y ninguna se puede resolver leyendo archivos:
-
-**El tramo 5 del rev share.** El Excel v4 (11-ago) dice 0%, un cliff, *"confirmado por
-la página de Supuestos"*. Notion (12-ago) dice 35%, *"corrección Pancho, no hay cliff"*.
-Con más de 40.000 M de saldo consolidado la diferencia es enorme.
-
-**El margen bruto de Cuentas Virtuales.** La guía del 8-ago marca el 65% de CV y el 95%
-de Float como **placeholders**: *"definirlos antes de montar el P&L"*. La regla del
-11-ago (costo = 30% del revenue variable, o sea 70% de margen) puede ser la definición
-que llegó después, o puede ser otra cosa.
-
-### 2. Node 24 en los proyectos de Vercel
-
-El `package.json` raíz declara `"node": ">=24"` y `.nvmrc` fija 24.13.1, pero en Vercel
-hay que seleccionarlo a mano: Settings → General → Node.js Version, en cada uno de los
-tres proyectos. **`eve` no compila con 22.**
-
-### 3. El entorno de nube en claude.ai/code
+### 1. El entorno de nube en claude.ai/code
 
 Es lo único que falta para que puedas trabajar desde el teléfono. **No lo puedo crear yo:
 los entornos de nube se configuran solo por UI, no hay comando ni API.** Y aunque la
@@ -69,43 +57,52 @@ y en la nube.
 > nube, el hook te lo va a avisar con el error exacto en vez de romper la sesión. Avisame
 > con ese error y lo resolvemos; no lo puedo verificar sin una sesión de nube real.
 
-### 4. La app de GitHub de Claude
+### 2. La app de GitHub de Claude
 
 Instalarla en `ezemartinfidi/fidi-crm` para que las sesiones de nube puedan clonar y
 pushear. Es un clic en el flujo de creación del entorno.
 
 ## Verificaciones pendientes (fase 0.5)
 
-### 5. Conectores MCP custom en el plan de Claude
+### 3. Granola: API key para el cron desatendido
 
-Confirmar que el plan de Fidi permite conectores MCP custom y que las 5 personas tienen
-Cowork habilitado. Si no, cambia la interfaz entera del proyecto.
+**El conector MCP ya funciona y alcanza para leer.** Verificado el 12-oct-26: cuenta
+`ezequiel@fidi.money`, workspace Fidi, scopes `personal` y `public`, 69 reuniones en los
+últimos 30 días con participantes y títulos. O sea que una sesión de Claude puede leer
+Granola hoy, sin API key.
 
-### 6. API key de Granola
+Lo que **no** se puede hacer sin API key es el cron desatendido de la fase 8: un cron de
+Vercel pegándole a `public-api.granola.ai/v1/notes` cada 15 minutos sin que haya una
+sesión de Claude abierta.
 
-El endpoint está verificado: `https://public-api.granola.ai/v1/notes` existe y responde
-401 con formato correcto. Falta confirmar que el plan lo permite.
+**El plan actual es `plus`, y la API REST pide Business.** Así que hay dos caminos:
 
-- Granola → Settings → Connectors → API keys → crear una (empieza con `grn_`)
-- Requiere plan **Business o Enterprise**
-- Probar: `curl -H "Authorization: Bearer grn_..." https://public-api.granola.ai/v1/notes`
+| Camino | Qué cuesta | Qué se gana |
+|---|---|---|
+| **A. Subir a Granola Business** | Plata | El cron de Vercel del plan original, 100% desatendido |
+| **B. Routine de Claude Code** | Nada | Un agente programado lee Granola por MCP y escribe al CRM por MCP |
 
-Si la opción no aparece, no estás en Business. La fase 8 pierde su mejor fuente de
-señales y hay que decidir si Cowork hace de puente (tiene ambos conectores).
+**B es la recomendación.** No cuesta nada, funciona con el plan que ya tenés, y encaja
+mejor con la decisión de usar Cowork como interfaz: la derivación de próximos pasos es
+juicio, no I/O, así que ya iba a necesitar el modelo de todos modos. Lo que se pierde es
+que depende de la infraestructura de routines en vez de un cron propio.
+
+Si elegís A, los pasos son: Granola → Settings → Connectors → API keys → crear una
+(empieza con `grn_`). Si la opción no aparece, el plan no la habilita todavía.
 
 ## Decisiones que necesitan tu ojo
 
-### 7. Dominio de `ALLOWED_SIGN_IN`
+### 4. Dominio de `ALLOWED_SIGN_IN`
 
 Está en `"fidi.money,fidi.cl"` porque tu mail de trabajo es `@fidi.money` pero el plan
 hablaba de `fidi.cl`. **Es el modelo de autorización completo**: si sobra uno, sacarlo.
 
-### 8. Cuál GTM Consorcio Targets
+### 5. Cuál GTM Consorcio Targets
 
 Hay dos databases con ese nombre en Notion, con data sources distintos. Mirar cuál vale
 antes de la fase 3. El extract baja las dos igual.
 
-### 9. Notion: marcar obsoletas las versiones viejas
+### 6. Notion: marcar obsoletas las versiones viejas
 
 Para que nadie las lea como vigentes:
 
@@ -115,7 +112,7 @@ Para que nadie las lea como vigentes:
 
 La fuente única es `docs/forecast-model.md` en este repo.
 
-### 10. Token de integración de Notion
+### 7. Token de integración de Notion
 
 Para la fase 3. Crear una integración interna y compartirle las 8 databases del
 teamspace. `NOTION_TOKEN` va **solo en `.env` local, nunca en Vercel**: la extracción
@@ -123,7 +120,7 @@ corre una vez desde tu máquina.
 
 ## Para producción, más adelante
 
-### 11. Google OAuth
+### 8. Google OAuth
 
 **No hace falta para desarrollar.** Para entrar localmente:
 

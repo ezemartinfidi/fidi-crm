@@ -17,6 +17,19 @@ function share(spp: string) {
 }
 
 describe("revenue share sobre float", () => {
+	// La decision que este test protege: el "tramo 5" al 0% no existe. Si alguien
+	// lo reintroduce leyendo el Excel v4, un saldo enorme pasa a pagar cero y la
+	// proyeccion se desploma sin que nada falle de forma evidente.
+	it("no tiene cliff arriba de 40.000 M: sigue pagando 35%", () => {
+		expect(pctTpmFor(TRAMOS, new Decimal("40000000000")).toString()).toBe(
+			"0.35",
+		);
+		expect(pctTpmFor(TRAMOS, new Decimal("500000000000")).toString()).toBe(
+			"0.35",
+		);
+		expect(share("500000000000").isZero()).toBe(false);
+	});
+
 	it("no paga nada por debajo del umbral de 300 M", () => {
 		expect(share("299999999").toString()).toBe("0");
 	});

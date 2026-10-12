@@ -9,9 +9,11 @@ import type { RevShareTramo } from "./types";
  *
  *     rev_share_mes = SPP x (TPM / 12) x pct_tramo
  *
- * Por debajo del umbral minimo no hay rev share. El ultimo tramo se mantiene:
- * no hay cliff arriba de 40.000 M (correccion de Pancho del 12-ago-26; la
- * version de julio ponia 0% y era un error).
+ * Por debajo del umbral minimo no hay rev share.
+ *
+ * El ultimo tramo es abierto y no hay cliff. El "tramo 5" al 0% arriba de
+ * 40.000 M que aparecia en el Excel v4 no existe (Ezequiel, 12-oct-26), asi que
+ * un saldo grande sigue pagando 35% y no cae a cero.
  */
 export function pctTpmFor(
 	tramos: readonly RevShareTramo[],

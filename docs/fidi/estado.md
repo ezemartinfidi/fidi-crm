@@ -15,11 +15,15 @@ cherry-pickear fixes de seguridad.
 - **Node 24** fijado en `.nvmrc`: `eve` lo exige, aunque el `package.json` raíz declare
   `>=22`. Con Node 22 el build del agente falla
 
-## Fase 0.5 — spikes ⚠️ parcial
+## Fase 0.5 — spikes ✅
 
-- Granola: endpoint verificado (`public-api.granola.ai/v1/notes` responde 401 con
-  formato correcto). **Falta la API key** para confirmar que el plan lo permite
-- MCP en Cowork: **sin verificar**, necesita revisar el plan de Claude de Fidi
+- **MCP en Cowork: confirmado** por Ezequiel (12-oct-26)
+- **Granola: el conector MCP funciona y alcanza para leer.** Verificado 12-oct-26:
+  workspace Fidi, scopes `personal` y `public`, 69 reuniones en 30 días con
+  participantes. El plan es `plus`
+- La **API REST sigue pidiendo Business**, así que el cron desatendido de la fase 8 no
+  se puede hacer con este plan. La alternativa sin costo es una routine de Claude Code
+  que lea por MCP: ver `pasos-manuales.md` paso 3
 
 ## Fase 1 — Fidi-ficación del core ✅
 
@@ -51,6 +55,11 @@ Implementado y testeado: parámetros v3 con zod y checksum canónico; tarifa por
 en los métodos `volumen` y `marginal` (EVAL-F5); revenue share por tramos, no
 escalonado; ramps compuesto de CV y lineal de Infra (EVAL-F4); timing con go-live,
 cuotas de setup y Fin Contrato (EVAL-F7); aritmética de meses por índice absoluto.
+
+**Decisiones del 12-oct-26 ya aplicadas:** el tramo 5 del rev share no existe (el
+tramo 4 es abierto, > 20.000 M al 35%, con test que falla si alguien reintroduce el
+cliff), y el margen bruto de CV queda **como placeholder a propósito**: no hay test que
+fije el 0,70, se testea que siga siendo el complemento del costo variable.
 
 **Falta:** `project.ts`, `scenarios.ts`, `aggregate.ts` y `engine.ts`. Son las piezas
 que solo se pueden escribir contra la salida real del Excel, y EVAL-F1 es la compuerta
