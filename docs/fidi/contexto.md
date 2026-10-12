@@ -8,6 +8,7 @@ completo está aprobado; esto es el índice de lo propio.
 | Cualquier cosa del forecast, tarifas, ramps, rev share | `docs/forecast-model.md` |
 | Dónde está parada la migración y qué falta | `docs/fidi/estado.md` |
 | Credenciales, cuentas, decisiones pendientes | `docs/fidi/pasos-manuales.md` |
+| Correr esto sin una máquina local | `docs/fidi/trabajar-en-la-nube.md` |
 
 ## Reglas duras
 
@@ -19,6 +20,11 @@ compila con 22, aunque upstream declare `>=22`.
 `db:push`) exigen `ALLOW_REMOTE_DB=1` por el guardrail de
 `packages/db/scripts/require-local-db.ts`, que existe justamente para que nadie
 borre producción. **Ese `DATABASE_URL` nunca debe apuntar al branch de producción.**
+
+Esto vale doble en un entorno de nube: sus variables de entorno **las puede leer
+cualquiera que use el entorno**, y la credencial de Postgres no se puede proteger con el
+mecanismo de API credentials porque ese agrega headers HTTP y Prisma abre un socket. Por
+eso el entorno de nube apunta a un branch `dev` de Neon y a nada más.
 
 **La base de tests no tiene por qué ser Neon.** Las sesiones de nube traen
 PostgreSQL 16 preinstalado, apagado por defecto. Levantarlo y apuntar `crm_test`
