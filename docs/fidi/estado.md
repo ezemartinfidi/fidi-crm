@@ -121,6 +121,18 @@ valores viejos no existen en el enum nuevo y el cast falla. `UNQUALIFIED_TO_BUY`
 `OPEN_DEAL_STAGES` explícito, así que un deal pausado queda fuera por construcción.
 Verificado por EVAL-C1.
 
+## 🛑 Antes de seguir con el forecast: la especificación quedó vieja
+
+El motor implementa el bloque congelado del **12-ago-2026**. En Notion hay una página
+del **7-oct**, 📐 *Metodología de Proyección de Revenue*, que describe un modelo
+distinto y es la que el equipo mantiene. Cambian cinco reglas (factor del ramp de CV,
+Infra sin Meses de Ramp, deals sin categoría, base de la tarifa, horizonte) y hay tres
+reglas nuevas que agosto no tiene: el MOU de Toku, la duplicación 2028 y la absorción
+del legacy de Tapp.
+
+Detalle y tabla comparativa en `docs/forecast-model.md`. **Es una decisión abierta**, y
+conviene tomarla antes de construir la pantalla de forecast o de importar Notion.
+
 ## Fase 4 — forecast en la API 🟡 backend listo, falta la UI
 
 `apps/api/src/forecast/` expone el motor por tRPC: `forecast.project`,

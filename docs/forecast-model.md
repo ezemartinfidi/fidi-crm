@@ -277,6 +277,40 @@ Consecuencia para los evals: **EVAL-F3 cambia de sentido.** Estaba especificado 
 "falla si alguien reintroduce 0,65"; eso ya no aplica, porque 0,65 es tan placeholder
 como 0,70. Pasa a verificar la relación de coherencia, no el número.
 
+## 🛑 Esta especificación quedó vieja: Notion cambió el modelo en octubre
+
+Esta página congela el bloque de parámetros del **12-ago-2026**. El 7-oct-2026 apareció
+en Notion **📐 Metodología de Proyección de Revenue**, que describe un modelo distinto y
+es la que el equipo mantiene hoy.
+
+No es un matiz. Cinco reglas cambian:
+
+| | 12-ago (lo que implementa el motor) | 7-oct (Notion vigente) |
+|---|---|---|
+| Factor del ramp CV | fijo: 1,145 saldo / 1,68 cuentas | **derivado**: `(1/0,05)^(1/(Ramp − planos))`, llega al 100% exacto en `Meses de Ramp` |
+| Infra sin Meses de Ramp | escalera 5/10/15 y después +10pp | **entra directo al tope en el go-live** |
+| Deal sin Forecast Category | entra a Qualified | **no entra a ningún escenario** |
+| Tarifa por cuenta | se fija con las cuentas del mes | **se fija con Cuentas Régimen**, no con las del mes |
+| Horizonte | ago-26 → dic-28, 29 meses | **sep-26 → dic-28, 28 meses** |
+| Meses de Setup por defecto | 2 en CV, 0 en el resto | **2 en CV, 3 en Infraestructura** |
+
+Y hay reglas que el modelo de agosto directamente no tiene:
+
+- **Toku se tarifica con su propio MOU**, una tabla distinta de la general.
+- **Duplicación 2028**: cuatro deals (Toku, Khipu, ETPay, Xpendit) duplican cuentas y
+  depósitos de forma lineal durante 2028. El ingreso no duplica, porque al cruzar tramo
+  la tarifa baja; el float sí.
+- **Tapp**: el legacy termina el 30-abr-2027 y su mínimo de 22 MM se traslada a otra
+  ficha. No sumar las dos después de esa fecha.
+
+**Esto explica por qué EVAL-F1 nunca iba a cerrar del todo.** El Excel v4 es de agosto,
+esta especificación es de agosto, y la verdad operativa es de octubre. Validar contra la
+planilla sirve para encontrar bugs de implementación, no para decidir el modelo.
+
+**Decisión pendiente:** si el motor pasa a seguir la metodología del 7-oct. Es lo
+recomendable, porque es lo que el equipo usa y lo que alimenta el `Fidi_Master_Financials`,
+pero cambia varias reglas y obliga a rehacer la validación contra una salida nueva.
+
 ## ⚠ El Excel subestima el float por 21x, y es un bug de la planilla
 
 Salió de correr EVAL-F1 por componente (13-oct-26). **El SPP consolidado del motor
@@ -322,6 +356,12 @@ millones en el horizonte.
 
 **El motor no imita este bug.** Por eso EVAL-F1 valida el SPP consolidado, que es la
 parte que el Excel calcula bien, y no compara la fila de float.
+
+**Y el bug no llegó a Notion.** Verificado el 13-oct-26: tanto la página de supuestos
+del 12-ago como la metodología del 7-oct tienen la fórmula correcta, con la TPM una sola
+vez. Los números publicados también: el float de may-2027 de la tabla mensual implica un
+SPP de 20.114 MM, que es justo donde arranca el tramo del 35%. O sea que **la migración
+no tiene que corregir datos**, solo no copiar la planilla.
 
 ## El Excel rampa el mínimo, y la especificación dice que no
 
