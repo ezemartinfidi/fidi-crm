@@ -1,35 +1,35 @@
 import { describe, expect, it } from "bun:test";
 import Decimal from "decimal.js";
-import { runForecast } from "../src/engine";
 import { monthIndexFromKey } from "../src/month";
-import { parseParams, V3_PARAMS_INPUT } from "../src/params";
-import { projectDeal } from "../src/project";
-import { perteneceAEscenario, scenarioFloorOf } from "../src/scenarios";
+import { parseParams, revShareTramosOf, V3_PARAMS_INPUT } from "../src/params";
+import { pctTpmFor } from "../src/revshare";
 import { ANCHO, findRow, loadSheet, parseSerie } from "./fixtures/parse";
 import { loadPipeline } from "./fixtures/pipeline";
 
 /**
- * EVAL-F1 — contrastar contra `Fidi_Revenue_Model_v4_Notion.xlsx`.
+ * El fixture del Excel v4 (11-ago-2026).
  *
- * Lo que se valida es lo que el Excel calcula bien, que despues de dos rondas
- * de analisis resulto ser casi todo:
+ * **Ya no es la referencia del modelo.** La metodologia del 7-oct-2026 cambio
+ * cinco reglas, asi que el motor y esta planilla describen modelos distintos a
+ * proposito y compararlos deal por deal no mide nada. Ver "Esta especificacion
+ * quedo vieja" en docs/forecast-model.md.
  *
- * - El **SPP consolidado** coincide exacto en los 29 meses. Es la validacion
- *   mas fuerte que hay del ramp de saldo y de la agregacion en dos pasadas.
- * - De las oportunidades del escenario que la planilla muestra, 24 de 25 caen
- *   dentro del 0,2%.
+ * Lo que el archivo sigue aportando, y por eso se conserva:
  *
- * Lo que **no** se compara es la fila de float, porque el Excel la calcula mal:
- * multiplica por la TPM una vez de mas y queda 21 veces por debajo. Ver "El
- * Excel subestima el float por 21x" en docs/forecast-model.md. Hacer que el
- * motor coincida ahi seria copiar el bug.
+ * - **El parser del volcado.** Si el ancho se desconfigura las filas se corren
+ *   una columna y los datos quedan plausibles y mal, que es el peor resultado
+ *   posible. Dos oportunidades conocidas lo fijan.
+ * - **La prueba del bug del float**, que es autocontenida: se contrasta el
+ *   float del Excel contra su propio SPP, sin meter al motor en el medio.
+ *
+ * EVAL-F1 como compuerta necesita un fixture nuevo: la tabla mensual de la
+ * seccion "Proyeccion vigente" del 7-oct, que es la salida que el equipo
+ * mantiene. Para construirla hace falta el extract de Notion (fase 3).
  */
 
-// El Excel se calculo con TPM 4,75%; produccion usa 4,5% (confirmado 12-oct-26).
-// El override es del escalar, no un parameter set aparte: es la unica
-// diferencia que queda, y el tramo 5 no importa porque el SPP consolidado del
-// modelo llega a 35.500 M y nunca cruza los 40.000 M del cliff.
-const PARAMS = parseParams({ ...V3_PARAMS_INPUT, tpmAnual: "0.0475" });
+// La planilla se calculo con TPM 4,75%; produccion usa 4,5%.
+const TPM_DEL_EXCEL = "0.0475";
+const PARAMS = parseParams({ ...V3_PARAMS_INPUT, tpmAnual: TPM_DEL_EXCEL });
 const MES1 = monthIndexFromKey(PARAMS.mes1);
 
 const PIPELINE = loadPipeline(MES1);
@@ -92,120 +92,35 @@ describe("el fixture del Excel v4", () => {
 	});
 });
 
-describe("EVAL-F1 — contraste por oportunidad", () => {
-	const esperados = porOportunidad();
+describe("el bug del float de la planilla", () => {
+	// Se mide contra el propio SPP del Excel, sin pasar por el motor: asi la
+	// prueba sobrevive a cualquier cambio del modelo, que es justo lo que
+	// acaba de pasar.
+	it("usa TPM al cuadrado donde va TPM, y por eso queda 21 veces abajo", () => {
+		const spp = parseSerie(findRow(REVENUE, "SPP consolidado") ?? []);
+		const float = parseSerie(findRow(REVENUE, "comp: Float") ?? []);
+		const tpm = new Decimal(TPM_DEL_EXCEL);
+		const tramos = revShareTramosOf(PARAMS);
 
-	/**
-	 * La seccion C de la planilla es del escenario 2, "+ COMMIT". Un deal de
-	 * Best Case o Pipeline figura con la fila en blanco, asi que compararlo
-	 * reportaria una diferencia que no existe.
-	 */
-	const comparables = PIPELINE.filter(
-		(f) =>
-			esperados.has(f.deal.input.dealId) &&
-			perteneceAEscenario(scenarioFloorOf(f.deal.scenario), "COMMIT"),
-	);
+		let medidos = 0;
+		for (let i = 0; i < spp.length; i++) {
+			const saldo = spp[i];
+			const pagado = float[i];
+			if (saldo === undefined || pagado === undefined) continue;
+			if (saldo.isZero() || pagado.isZero()) continue;
 
-	/** El peor desvio relativo de un deal a lo largo del horizonte. */
-	function peorDesvio(fila: (typeof PIPELINE)[number]): Decimal {
-		const esperado = esperados.get(fila.deal.input.dealId) ?? [];
-		const proyectado = projectDeal({
-			input: fila.deal.input,
-			params: PARAMS,
-			mes1: MES1,
-			horizonteMeses: PARAMS.horizonteMeses,
-		});
+			const correcto = saldo
+				.times(tpm.dividedBy(12))
+				.times(pctTpmFor(tramos, saldo));
 
-		let peor = new Decimal(0);
-		for (let i = 0; i < esperado.length; i++) {
-			const esp = esperado[i];
-			const celda = proyectado.meses[i];
-			if (esp === undefined || celda === undefined) continue;
-
-			// La seccion C es MRR + setup, sin float.
-			const obt = celda.recurrente.plus(celda.setup);
-			const abs = obt.minus(esp).abs();
-			const rel = esp.isZero()
-				? abs.isZero()
-					? new Decimal(0)
-					: new Decimal(1)
-				: abs.dividedBy(esp);
-			peor = Decimal.max(peor, rel);
-		}
-		return peor;
-	}
-
-	const desvios = comparables.map((f) => ({
-		id: f.deal.input.dealId,
-		peor: peorDesvio(f),
-	}));
-
-	it("compara contra las oportunidades del escenario que la planilla muestra", () => {
-		expect(comparables.length).toBeGreaterThanOrEqual(25);
-	});
-
-	it("reproduce al menos 24 de 25 dentro del 0,2% de tolerancia", () => {
-		// Medido el 13-oct-26, despues de resolver que el minimo rampa en
-		// Infraestructura y de despejar la escalera del Excel. Si baja, algo del
-		// motor se rompio; si sube, actualizar el numero.
-		const dentro = desvios.filter((d) => d.peor.lessThan("0.002")).length;
-		expect(dentro).toBeGreaterThanOrEqual(24);
-	});
-
-	it("la unica que queda afuera no se pasa del 15%", () => {
-		// Entel · BaaS para tarjeta de credito, 12%. Es la ultima diferencia
-		// sin explicar y no tiene todavia una hipotesis que la cubra.
-		const afuera = desvios.filter((d) => d.peor.greaterThanOrEqualTo("0.002"));
-		expect(afuera).toHaveLength(1);
-		expect(afuera[0]?.peor.lessThan("0.15")).toBe(true);
-	});
-});
-
-describe("EVAL-F1 — el SPP consolidado, que es lo que valida la agregacion", () => {
-	it("coincide con el Excel en los 29 meses", () => {
-		// La prueba mas fuerte del motor: el saldo de cada deal rampa igual y la
-		// suma de todos los del escenario da el mismo numero que la planilla.
-		// Es tambien lo que deja claro que el error del float no esta en el SPP.
-		const esperado = parseSerie(findRow(REVENUE, "SPP consolidado") ?? []);
-		const corrida = runForecast({
-			deals: PIPELINE.map((f) => f.deal),
-			params: PARAMS,
-			scenario: "COMMIT",
-		});
-
-		for (let i = 0; i < esperado.length; i++) {
-			const esp = esperado[i];
-			const obt = corrida.meses[i]?.sppConsolidado;
-			if (esp === undefined || obt === undefined || esp.isZero()) continue;
-
-			const rel = obt.minus(esp).abs().dividedBy(esp);
-			expect(rel.lessThan("0.0001")).toBe(true);
-		}
-	});
-
-	it("el float del Excel esta 21 veces por debajo, y el motor no copia el bug", () => {
-		// 1/0,0475 = 21,0526. La planilla multiplica por la TPM una vez de mas.
-		// Si algun dia alguien "arregla" el motor para que coincida, este test
-		// lo frena y el comentario explica por que.
-		const esperado = parseSerie(findRow(REVENUE, "comp: Float") ?? []);
-		const corrida = runForecast({
-			deals: PIPELINE.map((f) => f.deal),
-			params: PARAMS,
-			scenario: "COMMIT",
-		});
-
-		const ratios: Decimal[] = [];
-		for (let i = 0; i < esperado.length; i++) {
-			const esp = esperado[i];
-			const obt = corrida.meses[i]?.float;
-			if (esp === undefined || obt === undefined || esp.isZero()) continue;
-			ratios.push(obt.dividedBy(esp));
+			// La planilla multiplica por la TPM una vez de mas.
+			const conBug = correcto.times(tpm);
+			expect(
+				pagado.minus(conBug).abs().dividedBy(conBug).lessThan("0.001"),
+			).toBe(true);
+			medidos++;
 		}
 
-		expect(ratios.length).toBeGreaterThan(20);
-		const unoSobreTpm = new Decimal(1).dividedBy(PARAMS.tpmAnual);
-		for (const ratio of ratios) {
-			expect(ratio.minus(unoSobreTpm).abs().lessThan("0.01")).toBe(true);
-		}
+		expect(medidos).toBeGreaterThan(20);
 	});
 });

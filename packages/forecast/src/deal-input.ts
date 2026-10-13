@@ -45,8 +45,19 @@ export type DealForecastInput = {
 	readonly cuentasRegimen: number | null;
 	/** El tope del ramp de saldo, para el float. Null = no aporta float. */
 	readonly saldoVistaMaxClp: Decimal | null;
-	/** Acota la duracion de los ramps, tanto de CV como de Infra. */
+	/**
+	 * Define la duracion del ramp. En Cuentas Virtuales tambien define el
+	 * factor, porque el ramp tiene que tocar el 100% exacto en este mes.
+	 */
 	readonly mesesDeRamp: number | null;
+	/**
+	 * Cuantos meses quedan planos al 5% antes de componer. Null usa el default
+	 * de los parametros, que son 3.
+	 *
+	 * Toku, Khipu y ETPay usan 1: en esos contratos se definio que la rampa
+	 * empieza a correr al mes siguiente del go-live.
+	 */
+	readonly mesesPlanosRamp: number | null;
 
 	readonly minimoMensualClp: Decimal | null;
 	readonly setupFeeClp: Decimal | null;

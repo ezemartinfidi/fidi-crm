@@ -36,9 +36,17 @@ export function scenarioFloorOf(deal: DealScenarioInput): Scenario | null {
 	if (deal.forecastCategory === "OMITIR") return null;
 	if (deal.forecastCategory === "COMMIT") return "COMMIT";
 	if (deal.forecastCategory === "BEST_CASE") return "BEST_CASE";
+	if (deal.forecastCategory === "PIPELINE") return "QUALIFIED";
 
-	// Pipeline explicito o sin categoria cargada. Las dos cosas son Qualified.
-	return "QUALIFIED";
+	// **Sin categoria no entra a ningun escenario, ni siquiera a Qualified.**
+	// Un deal con fecha de cierre pero sin categoria es invisible para el
+	// forecast, y eso es a proposito: el modelo de agosto lo metia en Qualified
+	// y hacia que un dato faltante pareciera una decision de pipeline.
+	//
+	// El costo es que se puede perder plata sin que nada falle, asi que la
+	// metodologia del 7-oct pide revisar periodicamente los deals sin
+	// categoria. En el CRM eso deberia ser una vista, no una costumbre.
+	return null;
 }
 
 /** Si un deal con ese piso entra al escenario pedido. */

@@ -100,6 +100,7 @@ export class ForecastService {
 					cuentasRegimen: input?.cuentasRegimen ?? null,
 					saldoVistaMaxClp: input?.saldoVistaMaxClp ?? null,
 					mesesDeRamp: input?.mesesDeRamp ?? null,
+					mesesPlanosRamp: input?.mesesPlanosRamp ?? null,
 					minimoMensualClp: input?.minimoMensualClp ?? null,
 					setupFeeClp: input?.setupFeeClp ?? null,
 					mesesDeSetup: input?.mesesDeSetup ?? null,

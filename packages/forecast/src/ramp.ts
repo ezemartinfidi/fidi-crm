@@ -21,7 +21,7 @@ export function rampCompuesto({
 	mes: number;
 	tope: Decimal;
 	params: RampParams;
-	/** Acota la duracion del ramp: desde aca en adelante vale el tope. */
+	/** Define el factor: el ramp llega al 100% exacto en este mes. */
 	mesesDeRamp?: number | null;
 }): Decimal {
 	if (mes < 1) return new Decimal(0);
@@ -36,38 +36,52 @@ export function rampCompuesto({
 		return Decimal.min(plano, tope);
 	}
 
+	const factor = factorDeRamp(params, mesesDeRamp);
 	const compuestos = mes - params.mesesPlanos;
-	const valor = plano.times(params.factor.pow(compuestos));
-	return Decimal.min(valor, tope);
+	return Decimal.min(plano.times(factor.pow(compuestos)), tope);
 }
 
 /**
- * El ramp por defecto de Infraestructura cuando el deal no declara Meses de
- * Ramp: 5pp acumulativos en cada uno de los tres primeros meses y +10pp por mes
- * despues, hasta 100%.
+ * El factor del ramp geometrico de Cuentas Virtuales.
  *
- *     mes  1   2   3   4   5   6   7   8   9  10  11  12
- *     pct  5  10  15  25  35  45  55  65  75  85  95 100
+ * **Se deriva de `Meses de Ramp`**, no es una constante:
  *
- * Asi el 100% cae exacto en el mes 12, que es lo que el Excel v4 rotula como
- * "lineal 12m (5/5/5, luego +10pp hasta 100%)".
+ *     factor = (1 / arranque) ^ (1 / (Meses de Ramp − meses planos))
  *
- * El "5/5/5" es **acumulativo**, no tres meses planos al 5%. La diferencia no
- * se podia resolver leyendo el rotulo (las dos lecturas son gramaticales), asi
- * que se despejo del Excel: con el minimo, las cuentas y el valor esperado de
- * cada mes se resuelve numericamente el porcentaje implicito, y sobre 23 deals
- * de Infra la mediana da exactamente esta tabla en los doce meses.
+ * Asi el ramp toca el 100% exacto en el mes `Meses de Ramp`, que es lo que la
+ * metodologia del 7-oct-2026 define. Con tope 7.000 MM, ramp 8 y 1 mes plano el
+ * factor da 1,534 y la curva es 5,0 / 7,7 / 11,8 / 18,1 / 27,7 / 42,5 / 65,2 /
+ * 100.
+ *
+ * El modelo de agosto usaba factores fijos (1,145 para saldo y 1,68 para
+ * cuentas) que no dependian de la duracion, asi que el ramp llegaba al tope
+ * cuando llegaba. Los de `params` quedan como fallback para un deal sin Meses
+ * de Ramp, que en Cuentas Virtuales no deberia pasar porque el campo es
+ * obligatorio.
  */
-const INFRA_ARRANQUE_PCT = new Decimal("0.05");
-const INFRA_MESES_PLANOS = 3;
-const INFRA_INCREMENTO_PP = new Decimal("0.10");
+export function factorDeRamp(
+	params: RampParams,
+	mesesDeRamp: number | null | undefined,
+): Decimal {
+	if (mesesDeRamp == null || mesesDeRamp <= params.mesesPlanos) {
+		return params.factor;
+	}
+	if (params.arranquePct.lessThanOrEqualTo(0)) return params.factor;
+
+	const exponente = new Decimal(1).dividedBy(mesesDeRamp - params.mesesPlanos);
+	return new Decimal(1).dividedBy(params.arranquePct).pow(exponente);
+}
 
 /**
- * Ramp lineal hasta el tope. Infraestructura, que no tiene float.
+ * Ramp lineal hasta el tope: `tope x (mes / Meses de Ramp)`, sin meses planos.
+ * Infraestructura, que no tiene float.
  *
- * Con `mesesDeRamp` es lineal `mes / mesesDeRamp`. Sin el, aplica la escalera
- * por defecto de arriba. Antes esta rama devolvia el tope desde el mes 1, que
- * equivalia a no tener ramp.
+ * **Sin `Meses de Ramp` el deal entra directo al tope en el go-live.** No es un
+ * olvido: la metodologia del 7-oct-2026 lo dice explicito.
+ *
+ * El modelo de agosto aplicaba en cambio una escalera 5/10/15 y despues +10pp,
+ * que se despejo del Excel v4 y reproducia sus numeros exacto. Describe bien lo
+ * que la planilla hacia en agosto, pero no lo que el modelo hace hoy.
  */
 export function rampLineal({
 	mes,
@@ -80,23 +94,8 @@ export function rampLineal({
 }): Decimal {
 	if (mes < 1) return new Decimal(0);
 	if (tope.lessThanOrEqualTo(0)) return new Decimal(0);
-
-	if (mesesDeRamp == null || mesesDeRamp <= 0) {
-		return tope.times(infraPctPorDefecto(mes));
-	}
-
+	if (mesesDeRamp == null || mesesDeRamp <= 0) return tope;
 	if (mes >= mesesDeRamp) return tope;
+
 	return tope.times(mes).dividedBy(mesesDeRamp);
-}
-
-/** La fraccion del tope en el mes `mes`, acotada a 1. */
-export function infraPctPorDefecto(mes: number): Decimal {
-	if (mes < 1) return new Decimal(0);
-
-	// Los tres primeros acumulan 5pp cada uno: 5, 10, 15.
-	if (mes <= INFRA_MESES_PLANOS) return INFRA_ARRANQUE_PCT.times(mes);
-
-	const base = INFRA_ARRANQUE_PCT.times(INFRA_MESES_PLANOS);
-	const pct = base.plus(INFRA_INCREMENTO_PP.times(mes - INFRA_MESES_PLANOS));
-	return Decimal.min(pct, 1);
 }

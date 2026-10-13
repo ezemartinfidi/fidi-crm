@@ -66,7 +66,10 @@ describe("el checksum", () => {
 		const otroOrden = Object.fromEntries(
 			Object.entries({ ...V3_PARAMS_INPUT, tpmAnual: 0.045 }).reverse(),
 		);
-		expect(paramsChecksum(parseParams(otroOrden))).toBe(
+		// Se parsea con el schema y no con parseParams: fromEntries devuelve un
+		// indice generico, que es justo el caso de "forma desconocida" para el
+		// que existe el borde de I/O.
+		expect(paramsChecksum(forecastParamsSchema.parse(otroOrden))).toBe(
 			paramsChecksum(V3_PARAMS),
 		);
 	});

@@ -163,6 +163,8 @@ export function loadPipeline(mes1Absoluto: number): FilaPipeline[] {
 					cuentasRegimen: parseEntero(fila[COL.ctasRegimen]),
 					saldoVistaMaxClp: parseMonto(fila[COL.saldoVistaMax]),
 					mesesDeRamp: parseEntero(fila[COL.ramp]),
+					// El Excel de agosto no tenia la columna de meses planos.
+					mesesPlanosRamp: null,
 					minimoMensualClp: parseMonto(fila[COL.minimo]),
 					setupFeeClp: parseMonto(fila[COL.setupFee]),
 					mesesDeSetup: parseEntero(fila[COL.cuotasSetup]),

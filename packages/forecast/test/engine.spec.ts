@@ -46,6 +46,7 @@ function deal(over: Partial<DealForecastInput> = {}): DealForecastInput {
 		cuentasRegimen: 10_000,
 		saldoVistaMaxClp: new Decimal("1000000000"),
 		mesesDeRamp: null,
+		mesesPlanosRamp: null,
 		minimoMensualClp: new Decimal("5000000"),
 		setupFeeClp: new Decimal("12000000"),
 		mesesDeSetup: 2,
@@ -86,9 +87,20 @@ describe("timing del deal", () => {
 		expect(goLiveOf(d, PARAMS)).toBe(d.closeMonth + 3);
 	});
 
-	it("fuera de Cuentas Virtuales, sin meses de setup el go-live es el mes siguiente", () => {
+	it("fuera de Cuentas Virtuales, sin meses de setup carga el default de 3", () => {
 		const d = deal({ productos: [FDE], mesesDeSetup: null });
-		expect(goLiveOf(d, PARAMS)).toBe(d.closeMonth + 1);
+		expect(goLiveOf(d, PARAMS)).toBe(d.closeMonth + 4);
+	});
+
+	it("cero meses de setup no es lo mismo que vacio", () => {
+		// Cero es valido y significa go-live el mes siguiente al cierre; vacio
+		// aplica el default de la linea. Tratarlos igual correria el go-live
+		// tres meses en cada deal de Infra que puso cero a proposito.
+		const cero = deal({ productos: [FDE], mesesDeSetup: 0 });
+		const vacio = deal({ productos: [FDE], mesesDeSetup: null });
+
+		expect(goLiveOf(cero, PARAMS)).toBe(cero.closeMonth + 1);
+		expect(goLiveOf(vacio, PARAMS)).toBe(vacio.closeMonth + 4);
 	});
 
 	it("no factura recurrente antes del go-live", () => {
@@ -137,9 +149,10 @@ describe("EVAL-F6 — criterio minimo-floor", () => {
 		expect(piso.recurrente.toString()).toBe(piso.porCuenta.toString());
 	});
 
-	// La contracara de EVAL-F6: la regla del piso es de Cuentas Virtuales, no
-	// del modelo entero. En Infraestructura el minimo rampa igual que el resto.
-	it("en Infraestructura el minimo rampa, y en Cuentas Virtuales no", () => {
+	it("el minimo no rampa en ninguna linea: se factura completo desde el go-live", () => {
+		// La rampa es de cuentas y de saldo, no del piso que el cliente paga.
+		// El modelo de agosto rampaba el minimo en Infraestructura; la
+		// metodologia del 7-oct no, y es la vigente.
 		const infra = deal({
 			productos: [CORE_DE_CUENTAS],
 			cuentasRegimen: null,
@@ -153,11 +166,36 @@ describe("EVAL-F6 — criterio minimo-floor", () => {
 			minimoMensualClp: new Decimal("2000000"),
 		});
 
-		// Primer mes del ramp: Infra cobra el 5%, CV el minimo entero.
-		expect(celda(infra, goLiveOf(infra, PARAMS)).minimo.toString()).toBe(
-			"100000",
+		for (const d of [infra, cv]) {
+			expect(celda(d, goLiveOf(d, PARAMS)).minimo.toString()).toBe("2000000");
+		}
+	});
+});
+
+describe("la tarifa se fija con Cuentas Regimen", () => {
+	it("durante la rampa se cobra la tarifa del regimen, no la del mes", () => {
+		// Un deal que va a 100.000 cuentas paga 76 CLP desde el primer mes,
+		// aunque ese mes tenga 5.000 y la tabla diga 190 para ese volumen.
+		// El modelo de agosto re-tarifaba mes a mes, lo que hacia caer el
+		// ingreso por cuenta al avanzar la rampa: al reves del contrato.
+		const d = deal({
+			productos: [CORE_DE_CUENTAS],
+			cuentasRegimen: 100_000,
+			saldoVistaMaxClp: null,
+			minimoMensualClp: null,
+			mesesDeRamp: 10,
+		});
+
+		const goLive = goLiveOf(d, PARAMS);
+		const primero = celda(d, goLive);
+		const regimen = celda(d, goLive + 20);
+
+		expect(primero.cuentas.lessThan(regimen.cuentas)).toBe(true);
+		// El rate por cuenta es el mismo en los dos meses.
+		expect(primero.porCuenta.dividedBy(primero.cuentas).toFixed(4)).toBe(
+			regimen.porCuenta.dividedBy(regimen.cuentas).toFixed(4),
 		);
-		expect(celda(cv, goLiveOf(cv, PARAMS)).minimo.toString()).toBe("2000000");
+		expect(regimen.porCuenta.dividedBy(regimen.cuentas).toFixed(0)).toBe("76");
 	});
 });
 
@@ -256,12 +294,15 @@ describe("EVAL-F8 — escenarios acumulativos", () => {
 			"commit",
 			"best",
 			"pipeline",
-			"sin-categoria",
 		]);
 	});
 
-	it("sin categoria cuenta como Pipeline, no como excluido", () => {
-		expect(scenarioFloorOf(abierto("x", null).scenario)).toBe("QUALIFIED");
+	it("sin categoria no entra a ningun escenario, ni siquiera a Qualified", () => {
+		// Un deal con fecha de cierre pero sin categoria es invisible para el
+		// forecast. Es a proposito: un dato faltante no es una decision de
+		// pipeline. El costo es que se puede perder plata en silencio, asi que
+		// el CRM necesita una vista que los liste.
+		expect(scenarioFloorOf(abierto("x", null).scenario)).toBeNull();
 	});
 
 	it("Omitir queda afuera de los cuatro", () => {

@@ -59,6 +59,7 @@ export const forecastParamsSchema = z.object({
 	}),
 
 	mesesDeSetupDefaultCv: z.number().int().positive(),
+	mesesDeSetupDefaultInfra: z.number().int().positive(),
 
 	margenesBrutos: z.object({
 		infraRecurrente: decimalString,
@@ -75,15 +76,24 @@ export type ForecastParams = z.infer<typeof forecastParamsSchema>;
 export type ForecastParamsInput = z.input<typeof forecastParamsSchema>;
 
 /**
- * v3, del bloque JSON del 12-ago-2026. Las diferencias con julio son
- * correcciones fechadas, no preferencias: ver docs/forecast-model.md.
+ * Los parametros vigentes, de la metodologia del 7-oct-2026.
+ *
+ * Reemplazan al bloque del 12-ago, que es el que reproduce el Excel v4. Las
+ * diferencias estan listadas en docs/forecast-model.md: no son correcciones de
+ * un error sino un modelo que cambio.
+ *
+ * Los factores de `rampCvSaldo` y `rampCvCuentas` quedan como fallback: desde
+ * octubre el factor se deriva de `Meses de Ramp` de cada deal y estos solo se
+ * usan si el campo esta vacio.
  */
 export const V3_PARAMS_INPUT: ForecastParamsInput = {
 	moneda: "CLP",
 	fxClpUsd: "950",
 	tpmAnual: "0.045",
-	mes1: "2026-08",
-	horizonteMeses: 29,
+	// El horizonte se movio con la metodologia del 7-oct-26: antes arrancaba en
+	// ago-26 y eran 29 meses.
+	mes1: "2026-09",
+	horizonteMeses: 28,
 
 	usarPctActivas: false,
 	pctActivasDefault: "0.70",
@@ -120,6 +130,7 @@ export const V3_PARAMS_INPUT: ForecastParamsInput = {
 	rampCvCuentas: { arranquePct: "0.05", mesesPlanos: 3, factor: "1.68" },
 
 	mesesDeSetupDefaultCv: 2,
+	mesesDeSetupDefaultInfra: 3,
 
 	margenesBrutos: {
 		infraRecurrente: "0.65",
@@ -218,6 +229,7 @@ export function paramsChecksum(params: ForecastParams): string {
 		`rampCvSaldo=${ramp(params.rampCvSaldo)}`,
 		`rampCvCuentas=${ramp(params.rampCvCuentas)}`,
 		`mesesDeSetupDefaultCv=${params.mesesDeSetupDefaultCv}`,
+		`mesesDeSetupDefaultInfra=${params.mesesDeSetupDefaultInfra}`,
 		`margenInfraRecurrente=${m.infraRecurrente.toString()}`,
 		`margenSetup=${m.setup.toString()}`,
 		`margenFde=${m.forwardDeployedEngineers.toString()}`,

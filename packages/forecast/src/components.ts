@@ -5,7 +5,12 @@ import { rampParamsOf, tarifaTramosOf } from "./params";
 import { rampCompuesto, rampLineal } from "./ramp";
 import { revenuePorCuenta } from "./tarifa";
 import { cuotaSetup, goLiveMonth, mesDeRamp, recurrenteActivo } from "./timing";
-import type { MonthIndex, RecurringRule, RevenueLine } from "./types";
+import type {
+	MonthIndex,
+	RampParams,
+	RecurringRule,
+	RevenueLine,
+} from "./types";
 
 /**
  * Los componentes de revenue de un deal en un mes.
@@ -72,9 +77,11 @@ export function mesesDeSetupEfectivos(
 	input: DealForecastInput,
 	params: ForecastParams,
 ): number {
+	// Cero es un valor valido y significa go-live el mes siguiente al cierre.
+	// No es lo mismo que vacio, que aplica el default de la linea.
 	if (input.mesesDeSetup !== null) return input.mesesDeSetup;
 	if (aportaFloat(input)) return params.mesesDeSetupDefaultCv;
-	return 0;
+	return params.mesesDeSetupDefaultInfra;
 }
 
 export function goLiveOf(
@@ -142,31 +149,12 @@ export function fraccionDeRamp({
 		return rampCompuesto({
 			mes: m,
 			tope: uno,
-			params: rampParamsOf(params.rampCvCuentas),
+			params: rampDelDeal(input, params.rampCvCuentas),
 			mesesDeRamp: input.mesesDeRamp,
 		});
 	}
 
 	return rampLineal({ mes: m, tope: uno, mesesDeRamp: input.mesesDeRamp });
-}
-
-/**
- * Si el Minimo Mensual rampa junto con el resto, o se factura completo desde
- * el go-live.
- *
- * **En Cuentas Virtuales no rampa; en Infraestructura si.** La especificacion
- * describia solo el caso de CV, donde el minimo es un piso contractual sobre un
- * fee por uso y cobrarlo a medias no tendria sentido. En Infraestructura el
- * minimo es un fee de plataforma que entra a medida que el cliente la adopta.
- *
- * Esto no se dedujo de un documento: los dos describian cosas distintas sin
- * decirlo. Salio de contrastar las 122 oportunidades del Excel v4, donde la
- * separacion es total: 63 de 63 deals de CV se explican **solo** si el minimo
- * no rampa, y 21 de 21 de Infra **solo** si rampa. Cero contraejemplos en
- * cualquiera de las dos direcciones. Confirmado por Ezequiel el 13-oct-26.
- */
-export function minimoRampa(input: DealForecastInput): boolean {
-	return !aportaFloat(input);
 }
 
 /**
@@ -205,7 +193,7 @@ export function saldoDelMes({
 	return rampCompuesto({
 		mes: mesDeRamp(mes, goLive),
 		tope: saldo,
-		params: rampParamsOf(params.rampCvSaldo),
+		params: rampDelDeal(input, params.rampCvSaldo),
 		mesesDeRamp: input.mesesDeRamp,
 	});
 }
@@ -280,16 +268,11 @@ export function componentesDelMes({
 	const cuentas = cuentasDelMes({ mes, input, params });
 	const porCuenta = cuentas.isZero()
 		? CERO
-		: revenuePorCuenta(
-				tarifaTramosOf(params),
-				cuentas,
-				params.tarifaMetodoActivo,
-			);
+		: rateDeRegimen(input, params).times(cuentas);
 
-	const minimoPleno = input.minimoMensualClp ?? CERO;
-	const minimo = minimoRampa(input)
-		? minimoPleno.times(fraccionDeRamp({ mes, input, params }))
-		: minimoPleno;
+	// El minimo se factura completo desde el go-live, en las dos lineas. La
+	// rampa es de cuentas y de saldo, no del piso que el cliente paga.
+	const minimo = input.minimoMensualClp ?? CERO;
 	const mrrFijo = mrrFijoDelMes({ mes, input, params });
 
 	const combinado =
@@ -307,4 +290,50 @@ export function componentesDelMes({
 		saldoFloat: saldoDelMes({ mes, input, params }),
 		cuentas,
 	};
+}
+
+/**
+ * El rate por cuenta del deal, fijado con **Cuentas Regimen** y no con las
+ * cuentas del mes.
+ *
+ * Durante la rampa se cobra la tarifa del regimen: un deal que va a llegar a
+ * 100.000 cuentas paga 76 CLP por cuenta desde el primer mes, aunque ese mes
+ * tenga 5.000 y la tabla diga 190 para ese volumen.
+ *
+ * El modelo de agosto re-tarifaba mes a mes segun las cuentas activas, lo que
+ * hacia caer el ingreso por cuenta al avanzar la rampa, justo al reves de lo
+ * que el contrato dice.
+ *
+ * El metodo `marginal` sigue existiendo y se escala igual, porque la base de
+ * calculo tambien es el regimen.
+ */
+export function rateDeRegimen(
+	input: DealForecastInput,
+	params: ForecastParams,
+): Decimal {
+	const regimen = input.cuentasRegimen;
+	if (regimen === null || regimen <= 0) return CERO;
+
+	const base = new Decimal(regimen);
+	return revenuePorCuenta(
+		tarifaTramosOf(params),
+		base,
+		params.tarifaMetodoActivo,
+	).dividedBy(base);
+}
+
+/**
+ * Los parametros de ramp del deal: los globales, con los meses planos del deal
+ * si los declara.
+ */
+function rampDelDeal(
+	input: DealForecastInput,
+	globales: ForecastParams["rampCvSaldo"],
+): RampParams {
+	const base = rampParamsOf(globales);
+	// `== null` y no `=== null`: un campo ausente llega como undefined y
+	// sobrescribiria mesesPlanos con undefined, que propaga NaN hasta el monto.
+	// Un NaN en plata es el peor error posible, porque no falla, se muestra.
+	if (input.mesesPlanosRamp == null) return base;
+	return { ...base, mesesPlanos: input.mesesPlanosRamp };
 }

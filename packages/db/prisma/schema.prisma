@@ -1071,6 +1071,9 @@ model DealForecastInput {
   saldoVistaMaxClp Decimal? @db.Decimal(20, 2)
   /// Acota la duracion de los ramps, tanto de CV como de Infra.
   mesesDeRamp      Int?
+  /// Meses planos al 5% antes de que el ramp de CV componga. Null usa el
+  /// default de 3. Toku, Khipu y ETPay usan 1.
+  mesesPlanosRamp  Int?
 
   minimoMensualClp Decimal? @db.Decimal(18, 2)
   setupFeeClp      Decimal? @db.Decimal(18, 2)

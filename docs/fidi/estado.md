@@ -121,17 +121,42 @@ valores viejos no existen en el enum nuevo y el cast falla. `UNQUALIFIED_TO_BUY`
 `OPEN_DEAL_STAGES` explícito, así que un deal pausado queda fuera por construcción.
 Verificado por EVAL-C1.
 
-## 🛑 Antes de seguir con el forecast: la especificación quedó vieja
+## El modelo sigue la metodología del 7-oct ✅
 
-El motor implementa el bloque congelado del **12-ago-2026**. En Notion hay una página
-del **7-oct**, 📐 *Metodología de Proyección de Revenue*, que describe un modelo
-distinto y es la que el equipo mantiene. Cambian cinco reglas (factor del ramp de CV,
-Infra sin Meses de Ramp, deals sin categoría, base de la tarifa, horizonte) y hay tres
-reglas nuevas que agosto no tiene: el MOU de Toku, la duplicación 2028 y la absorción
-del legacy de Tapp.
+El motor adoptó las reglas vigentes de Notion (📐 *Metodología de Proyección de Revenue*),
+que reemplazan al bloque congelado del 12-ago. Lo que cambió:
 
-Detalle y tabla comparativa en `docs/forecast-model.md`. **Es una decisión abierta**, y
-conviene tomarla antes de construir la pantalla de forecast o de importar Notion.
+| | 12-ago (antes) | 7-oct (ahora) |
+|---|---|---|
+| Factor del ramp CV | fijo 1,145 / 1,68 | **derivado**: toca el 100% exacto en `Meses de Ramp` |
+| Meses planos del ramp | siempre 3 | 3 por defecto, **1 en Toku, Khipu y ETPay** |
+| Infra sin Meses de Ramp | escalera 5/10/15 +10pp | **entra directo al tope** |
+| El mínimo | rampaba en Infra | **no rampa en ninguna línea** |
+| Deal sin Forecast Category | entraba a Qualified | **no entra a ningún escenario** |
+| Tarifa por cuenta | cuentas del mes | **Cuentas Régimen** |
+| Meses de Setup por defecto | 2 CV, 0 resto | **2 CV, 3 Infra** |
+| Horizonte | ago-26, 29 meses | **sep-26, 28 meses** |
+
+Dos consecuencias que vale tener presentes.
+
+**La tarifa del régimen invierte un comportamiento.** Antes, al avanzar la rampa el deal
+cruzaba tramos hacia arriba y la tarifa bajaba, así que el ingreso por cuenta caía
+durante el crecimiento. Ahora se fija con Cuentas Régimen desde el primer mes.
+
+**Un deal sin categoría es invisible para el forecast.** Es a propósito: un dato faltante
+no es una decisión de pipeline. Pero se puede perder plata sin que nada falle, así que el
+CRM necesita una vista que los liste. Está pendiente.
+
+**Falta implementar tres reglas especiales** que la metodología describe y el motor no
+tiene todavía: la tabla MOU propia de Toku, la duplicación 2028 de cuatro deals (Toku,
+Khipu, ETPay, Xpendit) y la absorción del legacy de Tapp en abr-27. No se deducen de los
+campos, así que necesitan modelo de datos propio.
+
+**EVAL-F1 quedó sin compuerta.** El Excel v4 es de agosto y ya no es referencia válida:
+comparar contra él mide la distancia a un modelo viejo. El fixture se conserva por dos
+cosas que siguen valiendo, el parser y la prueba autocontenida del bug del float. La
+referencia nueva es la tabla mensual de "Proyección vigente" del 7-oct, y construirla
+necesita el extract de Notion.
 
 ## Fase 4 — forecast en la API 🟡 backend listo, falta la UI
 

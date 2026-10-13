@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import Decimal from "decimal.js";
 import { rampParamsOf, V3_PARAMS } from "../src/params";
-import { rampCompuesto, rampLineal } from "../src/ramp";
+import { factorDeRamp, rampCompuesto, rampLineal } from "../src/ramp";
 
 const SALDO = rampParamsOf(V3_PARAMS.rampCvSaldo);
 const CUENTAS = rampParamsOf(V3_PARAMS.rampCvCuentas);
@@ -92,32 +92,13 @@ describe("ramp lineal de Infraestructura", () => {
 		).toBe(TOPE.toString());
 	});
 
-	// La tabla no se adivino: se despejo del Excel v4. Con el minimo, las
-	// cuentas y el valor esperado de cada mes se resuelve numericamente el
-	// porcentaje implicito, y sobre 23 deals de Infra la mediana da exactamente
-	// esto en los doce meses.
-	//
-	// El "5/5/5" del rotulo es acumulativo, no tres meses planos al 5%. Las dos
-	// lecturas son gramaticales y por eso hubo que ir a los datos.
-	it("sin meses de ramp sigue la escalera que el Excel implica: 5/10/15 y +10pp", () => {
-		const pct = (mes: number) =>
-			rampLineal({ mes, tope: TOPE, mesesDeRamp: null })
-				.dividedBy(TOPE)
-				.times(100)
-				.toNumber();
-
-		expect([1, 2, 3, 4, 5, 6].map(pct)).toEqual([5, 10, 15, 25, 35, 45]);
-		expect([7, 8, 9, 10, 11, 12].map(pct)).toEqual([55, 65, 75, 85, 95, 100]);
-	});
-
-	it("llega al 100% exacto en el mes 12, que es lo que el rotulo decia", () => {
-		// Con la lectura plana (5/5/5) el mes 12 valia 95% y el tope caia en el
-		// 13: el rotulo "lineal 12m" y la regla no cerraban. Acumulativa, si.
+	// Antes habia aca una escalera 5/10/15 y despues +10pp, despejada del Excel
+	// v4. Reproducia esa planilla exacto, pero describia el modelo de agosto: la
+	// metodologia del 7-oct dice que sin Meses de Ramp el deal entra directo al
+	// tope. Queda la arqueologia en docs/forecast-model.md.
+	it("sin meses de ramp entra directo al tope en el go-live", () => {
 		expect(
-			rampLineal({ mes: 12, tope: TOPE, mesesDeRamp: null }).toString(),
-		).toBe(TOPE.toString());
-		expect(
-			rampLineal({ mes: 40, tope: TOPE, mesesDeRamp: null }).toString(),
+			rampLineal({ mes: 1, tope: TOPE, mesesDeRamp: null }).toString(),
 		).toBe(TOPE.toString());
 	});
 });
@@ -137,5 +118,69 @@ describe("EVAL-F4 — el porcentaje de cuentas activas", () => {
 		});
 
 		expect(conPct.toString()).toBe(base.times("0.7").toString());
+	});
+});
+
+describe("el factor del ramp de CV se deriva de Meses de Ramp", () => {
+	// El ejemplo verificable de la metodologia del 7-oct-2026: tope 7.000 MM,
+	// ramp 8, 1 mes plano. El factor da 1,534 y la curva es la de la tabla.
+	const TOPE_EJEMPLO = new Decimal("7000");
+	const PARAMS_EJEMPLO = {
+		arranquePct: new Decimal("0.05"),
+		mesesPlanos: 1,
+		// Nunca se usa: con mesesDeRamp cargado el factor se deriva.
+		factor: new Decimal("999"),
+	};
+
+	const pct = (mes: number) =>
+		rampCompuesto({
+			mes,
+			tope: TOPE_EJEMPLO,
+			params: PARAMS_EJEMPLO,
+			mesesDeRamp: 8,
+		})
+			.dividedBy(TOPE_EJEMPLO)
+			.times(100)
+			.toDecimalPlaces(1)
+			.toNumber();
+
+	it("reproduce la curva del ejemplo de la metodologia", () => {
+		expect([1, 2, 3, 4].map(pct)).toEqual([5.0, 7.7, 11.8, 18.1]);
+		expect([5, 6, 7, 8].map(pct)).toEqual([27.7, 42.5, 65.2, 100]);
+	});
+
+	it("el factor sale de la duracion, no de una constante", () => {
+		// (1/0,05)^(1/(8-1)) = 20^(1/7)
+		const esperado = new Decimal(20).pow(new Decimal(1).dividedBy(7));
+		expect(
+			factorDeRamp(PARAMS_EJEMPLO, 8).minus(esperado).abs().lessThan("1e-12"),
+		).toBe(true);
+	});
+
+	it("un ramp mas largo arranca igual pero sube mas despacio", () => {
+		// Es la consecuencia de derivar el factor: los dos tocan el 100% en su
+		// propio mes final, y el de 8 va siempre por delante.
+		const corto = rampCompuesto({
+			mes: 4,
+			tope: TOPE_EJEMPLO,
+			params: PARAMS_EJEMPLO,
+			mesesDeRamp: 8,
+		});
+		const largo = rampCompuesto({
+			mes: 4,
+			tope: TOPE_EJEMPLO,
+			params: PARAMS_EJEMPLO,
+			mesesDeRamp: 16,
+		});
+
+		expect(corto.greaterThan(largo)).toBe(true);
+		expect(
+			rampCompuesto({
+				mes: 16,
+				tope: TOPE_EJEMPLO,
+				params: PARAMS_EJEMPLO,
+				mesesDeRamp: 16,
+			}).toString(),
+		).toBe(TOPE_EJEMPLO.toString());
 	});
 });
