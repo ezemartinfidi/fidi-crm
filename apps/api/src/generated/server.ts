@@ -24,6 +24,7 @@ import { dashboardSummaryInput, dashboardSummaryOutput } from "../dashboard/dash
 import { dealListInput, dealListOutput, dealIdInput, dealDetailOutput, dealCreateInput, dealCreateOutput, dealUpdateArgs, dealMutateOutput, setStageInput, dealSetStageOutput, dealContactsInput, dealContactOptionsOutput, dealAttachContactInput, dealContactLinkOutput, dealDetachContactInput, dealContactRoleInput, dealContactRoleOutput, dealBulkOwnerInput, dealBulkResultOutput, dealBulkStageInput, dealBulkInput } from "../deals/deals.contracts";
 import { enrichmentQueueInput } from "@crm/validation/enrichment-queue";
 import { fieldListInput, fieldListOutput, fieldByKeyInput, serializedFieldOutput, fieldEntityInput, fieldFiltersOutput, fieldIdInput, fieldCoverageOutput, fieldCreateInput, fieldUpdateArgs, fieldReorderInput, fieldReorderOutput, fieldDeleteOutput, fieldBackfillOutput } from "../fields/fields.contracts";
+import { projectInput, forecastRunOutput, projectAllOutput, dealForecastInput, dealForecastOutput } from "../forecast/forecast.contracts";
 import { googleConnectionStatusOutput, setAutoCreateInput, suppressDomainInput, suppressDomainOutput, threadInput, emailThreadOutput, calendarEventInput, calendarEventOutput } from "../google/google.contracts";
 import { purgeSyncedDataOutput, revokeAccessOutput, microsoftConnectionStatusOutput, setOutlookAutoCreateInput } from "../microsoft/microsoft.contracts";
 import { productListOutput, dealProductsInput, dealProductsOutput } from "../products/products.contracts";
@@ -528,6 +529,20 @@ const appRouter = t.router({
       .input(fieldIdInput)
       .output(fieldBackfillOutput)
       .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as any)
+    }),
+  forecast: t.router({
+    project: publicProcedure
+      .input(projectInput)
+      .output(forecastRunOutput)
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as any),
+    scenarios: publicProcedure
+      .input(projectInput)
+      .output(projectAllOutput)
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as any),
+    byDeal: publicProcedure
+      .input(dealForecastInput)
+      .output(dealForecastOutput)
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as any)
     }),
   google: t.router({
     status: publicProcedure

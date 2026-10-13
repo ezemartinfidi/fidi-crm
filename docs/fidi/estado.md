@@ -39,6 +39,41 @@ en riesgo todavía.
 No se cargó el seed de demo de upstream a propósito: son empresas y deals ficticios que
 habría que limpiar antes de importar Notion.
 
+## Correr los tests sin Docker ⚠️ leer antes de confiar en un "todo verde"
+
+El `.env` local apunta al branch `dev` de Neon: `DATABASE_URL` a `neondb`,
+`TEST_DATABASE_URL` a `crm_test` y `SHADOW_DATABASE_URL` a `crm_shadow` (Prisma la
+borra y la reconstruye en cada `migrate dev`; nunca apuntarla a una base con datos).
+
+**Dos cosas que hay que saber:**
+
+**Turbo cachea los tests, y eso esconde fallas.** Varios "todo verde" de esta rama
+fueron cache hits, no corridas reales. Cuando el cambio de schema invalidó el caché
+aparecieron 61 tests de telemetría que llevaban tiempo sin ejecutarse y 1 error de lint
+preexistente en `tracking.service.ts`. Para verificar de verdad: `bun run test --force`.
+
+**La suite de integración de la API no corre bien contra Neon desde Chile, y no hay
+que intentar que corra.** Los números medidos el 12-oct-26:
+
+| Corrida | Tiempo | Resultado |
+|---|---|---|
+| Suite completa, 0,25 CU | 11 min | 19 fallas de la API |
+| Solo la API, 2 CU | **40 min** | **42 fallas** |
+| Un archivo solo | 14 s | verde |
+
+Subir el compute lo empeoró, y eso descarta la hipótesis de CPU: **el cuello es la
+latencia de red**, no el procesamiento. Cada test de integración hace decenas de
+round-trips a us-east-1, y con 37 archivos en paralelo contra una sola base los
+timeouts de 5s se disparan y el estado compartido entre archivos se pisa. Tampoco es
+cuota: el proyecto lleva 352 segundos de compute consumidos de un plan `free_v3`.
+
+**El gate real de la API es CI**, que levanta `postgres:17-alpine` como service y
+corre todo contra localhost. Lo que sí vale localmente: los tests de paquete (forecast,
+db, telemetry, auth, env, validation) y los archivos de API de a uno.
+
+La otra salida está documentada arriba: la VM de las sesiones de nube trae **PostgreSQL
+16 local**, y apuntar `crm_test` ahí elimina la red del problema.
+
 ## Fase 1 — Fidi-ficación del core ✅
 
 | Qué | Dónde |
@@ -60,6 +95,25 @@ valores viejos no existen en el enum nuevo y el cast falla. `UNQUALIFIED_TO_BUY`
 **Auditoría de `STAND_BY` hecha:** todas las queries de pipeline ya usaban
 `OPEN_DEAL_STAGES` explícito, así que un deal pausado queda fuera por construcción.
 Verificado por EVAL-C1.
+
+## Fase 4 — forecast en la API 🟡 backend listo, falta la UI
+
+`apps/api/src/forecast/` expone el motor por tRPC: `forecast.project`,
+`forecast.scenarios` y `forecast.byDeal`. 23 routers, 165 procedures.
+
+Todo es Query y ninguna Mutation, porque proyectar no escribe. Congelar un snapshot sí
+escribe y va a ser una mutation aparte.
+
+**Los montos viajan como string, no como number.** El motor usa `decimal.js` justamente
+porque el punto flotante desvía más allá de la tolerancia en 29 meses encadenados;
+serializar a `number` tiraría esa precisión en el último metro.
+
+Si no hay ningún `ForecastParameterSet` con estado `ACTIVE`, cae al v3 congelado del
+paquete y lo reporta como versión `v3-builtin`. No es un default silencioso: la versión
+viaja en la respuesta.
+
+**Falta:** la pantalla en `apps/app`, el editor de inputs en el deal sheet y el botón de
+congelar snapshot.
 
 ## Fase 2 — motor de forecast 🟡 primitivos listos
 
