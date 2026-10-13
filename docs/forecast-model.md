@@ -304,15 +304,21 @@ float es un revenue share del 1,19% y no del 25% contratado.
 
 ### Cuánto cambia
 
-Escenario COMMIT, 29 meses:
+Ojo con qué TPM se usa para medirlo. El bug se demuestra **con la tasa del propio Excel**
+(4,75%), porque es aritmética interna de la planilla y ahí el ratio da exactamente
+`1/TPM`. Pero el impacto de negocio se calcula con la **tasa de producción, 4,5%**, que
+es la de Chile y la que tiene `V3_PARAMS`.
+
+Escenario COMMIT, 29 meses, a TPM 4,5%:
 
 | | CLP |
 |---|---|
 | Float según el Excel | 27.847.261 |
-| Float correcto | 586.258.149 |
-| **Diferencia** | **558.410.888** |
+| **Float correcto** | **555.402.457** |
+| **Diferencia** | **527.555.196** |
 
-El float pasa de ser el 0,79% del revenue a **14,38%**.
+El float pasa de ser el 0,79% del revenue a **13,73%**. Sobre un revenue total de 4.045
+millones en el horizonte.
 
 **El motor no imita este bug.** Por eso EVAL-F1 valida el SPP consolidado, que es la
 parte que el Excel calcula bien, y no compara la fila de float.

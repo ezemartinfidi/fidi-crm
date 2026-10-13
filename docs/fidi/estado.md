@@ -172,9 +172,9 @@ explican solo si no rampa, 21 de 21 de Infra solo si rampa, cero contraejemplos.
 Se despejó numéricamente el porcentaje implícito del Excel sobre 23 deals y la mediana
 da la tabla exacta en los doce meses, llegando al 100% en el mes 12.
 
-⚠ **Y el Excel tiene un bug: subestima el float por 21x.** Multiplica por la TPM una vez
-de más. Son 558 millones de CLP sobre el horizonte, y el float pasa del 0,79% al 14,38%
-del revenue. El motor no copia el bug; hay un test que lo fija. Detalle en
+⚠ **Y el Excel tiene un bug: subestima el float.** Multiplica por la TPM una vez de más
+(`TPM²` donde va `TPM`). Medido con la tasa de producción de 4,5%, son **527 millones de
+CLP** sobre el horizonte, y el float pasa del 0,79% al **13,73%** del revenue. El motor no copia el bug; hay un test que lo fija. Detalle en
 `docs/forecast-model.md`.
 
 Tres cosas que conviene saber antes de tocar el motor:
