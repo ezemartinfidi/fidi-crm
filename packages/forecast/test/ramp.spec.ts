@@ -92,29 +92,29 @@ describe("ramp lineal de Infraestructura", () => {
 		).toBe(TOPE.toString());
 	});
 
-	// Antes este test afirmaba que sin Meses de Ramp arrancaba en el tope, que
-	// equivale a no tener ramp. Era un bug: el Excel v4 define una escalera por
-	// defecto para Infra.
-	it("sin meses de ramp aplica la escalera por defecto: 5/5/5 y despues +10pp", () => {
+	// La tabla no se adivino: se despejo del Excel v4. Con el minimo, las
+	// cuentas y el valor esperado de cada mes se resuelve numericamente el
+	// porcentaje implicito, y sobre 23 deals de Infra la mediana da exactamente
+	// esto en los doce meses.
+	//
+	// El "5/5/5" del rotulo es acumulativo, no tres meses planos al 5%. Las dos
+	// lecturas son gramaticales y por eso hubo que ir a los datos.
+	it("sin meses de ramp sigue la escalera que el Excel implica: 5/10/15 y +10pp", () => {
 		const pct = (mes: number) =>
 			rampLineal({ mes, tope: TOPE, mesesDeRamp: null })
 				.dividedBy(TOPE)
-				.toString();
+				.times(100)
+				.toNumber();
 
-		expect(pct(1)).toBe("0.05");
-		expect(pct(2)).toBe("0.05");
-		expect(pct(3)).toBe("0.05");
-		expect(pct(4)).toBe("0.15");
-		expect(pct(5)).toBe("0.25");
-		expect(pct(12)).toBe("0.95");
+		expect([1, 2, 3, 4, 5, 6].map(pct)).toEqual([5, 10, 15, 25, 35, 45]);
+		expect([7, 8, 9, 10, 11, 12].map(pct)).toEqual([55, 65, 75, 85, 95, 100]);
 	});
 
-	it("sin meses de ramp llega al 100% en el mes 13 y no lo pasa", () => {
-		// El Excel rotula la regla como "lineal 12m", pero 5/5/5 y +10pp llegan
-		// al tope recien en el 13. Se implementa la regla, no el rotulo; si
-		// EVAL-F1 difiere en un deal de Infra sin Meses de Ramp, empezar por aca.
+	it("llega al 100% exacto en el mes 12, que es lo que el rotulo decia", () => {
+		// Con la lectura plana (5/5/5) el mes 12 valia 95% y el tope caia en el
+		// 13: el rotulo "lineal 12m" y la regla no cerraban. Acumulativa, si.
 		expect(
-			rampLineal({ mes: 13, tope: TOPE, mesesDeRamp: null }).toString(),
+			rampLineal({ mes: 12, tope: TOPE, mesesDeRamp: null }).toString(),
 		).toBe(TOPE.toString());
 		expect(
 			rampLineal({ mes: 40, tope: TOPE, mesesDeRamp: null }).toString(),

@@ -158,9 +158,24 @@ fije el 0,70, se testea que siga siendo el complemento del costo variable.
 `aggregate.ts` y `engine.ts`. 76 tests verdes, con EVAL-F2, F4, F5, F6, F7, F8 y F9
 cubiertos.
 
-**Falta EVAL-F1**, que es la compuerta real: reproducir el Excel v4 mes a mes. Para eso
-hay que parsear `test/fixtures/v4-revenue.raw.txt`, que hoy es un volcado CSV en una
-sola línea.
+**EVAL-F1 corre y la fase 2 está cerrada.** El SPP consolidado coincide exacto con el
+Excel en los 29 meses, y 24 de las 25 oportunidades del escenario que la planilla
+muestra caen dentro del 0,2%. La única afuera es Entel, al 12%, sin hipótesis todavía.
+
+Dos cosas se resolvieron contra los datos, no leyendo documentos:
+
+**El mínimo rampa en Infraestructura y no en Cuentas Virtuales.** La especificación y
+el Excel no se contradecían: describían líneas distintas. 63 de 63 deals de CV se
+explican solo si no rampa, 21 de 21 de Infra solo si rampa, cero contraejemplos.
+
+**El "5/5/5" de la escalera de Infra es acumulativo** (5, 10, 15), no tres meses planos.
+Se despejó numéricamente el porcentaje implícito del Excel sobre 23 deals y la mediana
+da la tabla exacta en los doce meses, llegando al 100% en el mes 12.
+
+⚠ **Y el Excel tiene un bug: subestima el float por 21x.** Multiplica por la TPM una vez
+de más. Son 558 millones de CLP sobre el horizonte, y el float pasa del 0,79% al 14,38%
+del revenue. El motor no copia el bug; hay un test que lo fija. Detalle en
+`docs/forecast-model.md`.
 
 Tres cosas que conviene saber antes de tocar el motor:
 

@@ -123,19 +123,41 @@ describe("EVAL-F6 — criterio minimo-floor", () => {
 
 	it("en modo aditivo suma el minimo y la variable; en piso toma el mayor", () => {
 		const base = { cuentasRegimen: 10_000, minimoMensualClp: new Decimal(1) };
+		// Un mes con los dos ramps al tope, para comparar solo la combinacion.
+		const enRegimen = monthIndexFromKey("2028-06");
 		const aditivo = celda(
 			deal({ ...base, productos: [CORE_DE_CUENTAS], recurringRule: "ADITIVO" }),
-			monthIndexFromKey("2027-06"),
+			enRegimen,
 		);
-		const piso = celda(
-			deal({ ...base, recurringRule: "PISO" }),
-			monthIndexFromKey("2027-06"),
-		);
+		const piso = celda(deal({ ...base, recurringRule: "PISO" }), enRegimen);
 
 		expect(aditivo.recurrente.toString()).toBe(
-			aditivo.porCuenta.plus(1).toString(),
+			aditivo.minimo.plus(aditivo.porCuenta).toString(),
 		);
 		expect(piso.recurrente.toString()).toBe(piso.porCuenta.toString());
+	});
+
+	// La contracara de EVAL-F6: la regla del piso es de Cuentas Virtuales, no
+	// del modelo entero. En Infraestructura el minimo rampa igual que el resto.
+	it("en Infraestructura el minimo rampa, y en Cuentas Virtuales no", () => {
+		const infra = deal({
+			productos: [CORE_DE_CUENTAS],
+			cuentasRegimen: null,
+			saldoVistaMaxClp: null,
+			minimoMensualClp: new Decimal("2000000"),
+			mesesDeRamp: null,
+		});
+		const cv = deal({
+			cuentasRegimen: null,
+			saldoVistaMaxClp: new Decimal("1000"),
+			minimoMensualClp: new Decimal("2000000"),
+		});
+
+		// Primer mes del ramp: Infra cobra el 5%, CV el minimo entero.
+		expect(celda(infra, goLiveOf(infra, PARAMS)).minimo.toString()).toBe(
+			"100000",
+		);
+		expect(celda(cv, goLiveOf(cv, PARAMS)).minimo.toString()).toBe("2000000");
 	});
 });
 

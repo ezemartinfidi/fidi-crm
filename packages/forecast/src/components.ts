@@ -109,19 +109,64 @@ export function cuentasDelMes({
 		return CERO;
 	}
 
+	return topeDeCuentas(cuentas, params).times(
+		fraccionDeRamp({ mes, input, params }),
+	);
+}
+
+/**
+ * Que fraccion del regimen corresponde a este mes, entre 0 y 1.
+ *
+ * Cuentas Virtuales compone (5/5/5 y despues x1,68); Infraestructura sigue la
+ * escalera lineal. Cual aplica lo decide si el deal aporta float, que es lo que
+ * distingue a CV en la matriz, y no el nombre del producto.
+ */
+export function fraccionDeRamp({
+	mes,
+	input,
+	params,
+}: {
+	mes: MonthIndex;
+	input: DealForecastInput;
+	params: ForecastParams;
+}): Decimal {
+	const goLive = goLiveOf(input, params);
+	if (!recurrenteActivo({ mes, goLive, finContrato: input.finContratoMonth })) {
+		return CERO;
+	}
+
 	const m = mesDeRamp(mes, goLive);
-	const tope = topeDeCuentas(cuentas, params);
+	const uno = new Decimal(1);
 
 	if (aportaFloat(input)) {
 		return rampCompuesto({
 			mes: m,
-			tope,
+			tope: uno,
 			params: rampParamsOf(params.rampCvCuentas),
 			mesesDeRamp: input.mesesDeRamp,
 		});
 	}
 
-	return rampLineal({ mes: m, tope, mesesDeRamp: input.mesesDeRamp });
+	return rampLineal({ mes: m, tope: uno, mesesDeRamp: input.mesesDeRamp });
+}
+
+/**
+ * Si el Minimo Mensual rampa junto con el resto, o se factura completo desde
+ * el go-live.
+ *
+ * **En Cuentas Virtuales no rampa; en Infraestructura si.** La especificacion
+ * describia solo el caso de CV, donde el minimo es un piso contractual sobre un
+ * fee por uso y cobrarlo a medias no tendria sentido. En Infraestructura el
+ * minimo es un fee de plataforma que entra a medida que el cliente la adopta.
+ *
+ * Esto no se dedujo de un documento: los dos describian cosas distintas sin
+ * decirlo. Salio de contrastar las 122 oportunidades del Excel v4, donde la
+ * separacion es total: 63 de 63 deals de CV se explican **solo** si el minimo
+ * no rampa, y 21 de 21 de Infra **solo** si rampa. Cero contraejemplos en
+ * cualquiera de las dos direcciones. Confirmado por Ezequiel el 13-oct-26.
+ */
+export function minimoRampa(input: DealForecastInput): boolean {
+	return !aportaFloat(input);
 }
 
 /**
@@ -241,7 +286,10 @@ export function componentesDelMes({
 				params.tarifaMetodoActivo,
 			);
 
-	const minimo = input.minimoMensualClp ?? CERO;
+	const minimoPleno = input.minimoMensualClp ?? CERO;
+	const minimo = minimoRampa(input)
+		? minimoPleno.times(fraccionDeRamp({ mes, input, params }))
+		: minimoPleno;
 	const mrrFijo = mrrFijoDelMes({ mes, input, params });
 
 	const combinado =

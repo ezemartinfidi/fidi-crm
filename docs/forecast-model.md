@@ -277,6 +277,46 @@ Consecuencia para los evals: **EVAL-F3 cambia de sentido.** Estaba especificado 
 "falla si alguien reintroduce 0,65"; eso ya no aplica, porque 0,65 es tan placeholder
 como 0,70. Pasa a verificar la relación de coherencia, no el número.
 
+## ⚠ El Excel subestima el float por 21x, y es un bug de la planilla
+
+Salió de correr EVAL-F1 por componente (13-oct-26). **El SPP consolidado del motor
+coincide exacto con el del Excel en los 29 meses**, así que el ramp de saldo y la
+consolidación están bien. Pero el float que el Excel calcula sobre ese mismo SPP es
+**21 veces menor** que el correcto, con un ratio constante entre 21,0523 y 21,0528 en
+los 25 meses con float.
+
+`1 / 0,0475 = 21,0526`. **El Excel multiplica por la TPM una vez de más.**
+
+La tasa mensual implícita de la planilla es `0,0000376044`, y eso es exactamente:
+
+```
+TPM × TPM / 12 × pct_tramo  =  0,0475 × 0,0475 / 12 × 0,20  =  0,0000376044
+```
+
+Lo más probable es que alguien haya tomado la columna "Tasa anual" de la tabla de
+tramos (que ya es `TPM × pct`, o sea 0,950% para el tramo 1) y la haya vuelto a
+multiplicar por `TPM/12` en vez de dividirla por 12 y nada más.
+
+**La aritmética sola no dice quién tiene razón, pero la economía sí.** Con un SPP de
+2.102 millones de CLP y una TPM de 4,75%, el interés mensual son unos 8,3 millones, y
+el 25% de eso son 2,08 millones. El Excel dice 98.795, que sobre 2.102 millones de
+float es un revenue share del 1,19% y no del 25% contratado.
+
+### Cuánto cambia
+
+Escenario COMMIT, 29 meses:
+
+| | CLP |
+|---|---|
+| Float según el Excel | 27.847.261 |
+| Float correcto | 586.258.149 |
+| **Diferencia** | **558.410.888** |
+
+El float pasa de ser el 0,79% del revenue a **14,38%**.
+
+**El motor no imita este bug.** Por eso EVAL-F1 valida el SPP consolidado, que es la
+parte que el Excel calcula bien, y no compara la fila de float.
+
 ## El Excel rampa el mínimo, y la especificación dice que no
 
 Esto salió de correr EVAL-F1 por primera vez (12-oct-26) y es la diferencia más
@@ -299,13 +339,23 @@ Y eso es exactamente lo que esta especificación prohíbe:
 Virtuales y el Excel tiene razón para Infraestructura, o el Excel tiene el bug que la
 regla vino a corregir y esos 46 deals están mal en el modelo de agosto.
 
-**No se tocó el motor para que imite al Excel.** Hacerlo sería dar por válida la regla
-que esta especificación declara errónea, y la diferencia es material: en un deal de
-2.000.000 de mínimo, el primer mes son 100.000 contra 2.000.000.
+### ✅ Resuelto: las dos cosas eran ciertas, para líneas distintas
 
-**Pregunta para Pancho, y es la que destraba EVAL-F1.** Hasta que se responda, EVAL-F1
-no es compuerta: `eval-f1.spec.ts` fija el piso de 59 exactos y el techo de 46
-estructurales, para que el motor no se degrade sin que nadie lo note.
+Contrastando las 122 oportunidades, la separación resultó total:
+
+| Regla que lo explica | Deals | CV | Infra |
+|---|---|---|---|
+| El mínimo **no** rampa | 63 | **63** | 0 |
+| El mínimo **sí** rampa | 21 | 0 | **21** |
+
+Cero contraejemplos en ninguna dirección. **La regla mínimo-floor es de Cuentas
+Virtuales; en Infraestructura el mínimo rampa como el resto.** La especificación
+describía solo el caso de CV sin decirlo, y el Excel el de Infra.
+
+Tiene sentido comercial: en CV el mínimo es un piso contractual sobre un fee por uso, y
+cobrarlo a medias no tendría sentido; en Infra es un fee de plataforma que entra a
+medida que el cliente la adopta. Confirmado por Ezequiel el 13-oct-26 e implementado en
+`minimoRampa()`.
 
 ## 4. D8 tiene respuesta, y no es "vacío"
 
