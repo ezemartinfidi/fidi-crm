@@ -90,14 +90,29 @@ credenciales.
 > ida y vuelta de red, no trabajo real. Desde la VM de la sesión de nube debería ser
 > mucho menos, y medirlo es parte de la primera tarea.
 
-### 2. La app de GitHub de Claude
+### 2. Habilitar GitHub Actions en el fork
+
+**No hay ningún gate automático corriendo sobre la rama.** El workflow de CI existe y
+está bien (levanta `postgres:17-alpine` y corre todo contra localhost), pero el fork
+tiene cero runs: GitHub deshabilita los workflows en los forks hasta que el dueño los
+habilita.
+
+Es un clic: `github.com/ezemartinfidi/fidi-crm` → pestaña **Actions** → el botón de
+*"I understand my workflows, go ahead and enable them"*.
+
+Importa más de lo que parece. La suite de integración de la API **no se puede verificar
+desde una máquina en Chile** contra Neon: tarda 40 minutos y es flaky por latencia. CI
+es el único lugar donde corre contra un Postgres local. Hay un PR en draft
+(`ezemartinfidi/fidi-crm#1`) esperando justamente eso.
+
+### 3. La app de GitHub de Claude
 
 Instalarla en `ezemartinfidi/fidi-crm` para que las sesiones de nube puedan clonar y
 pushear. Es un clic en el flujo de creación del entorno.
 
 ## Verificaciones pendientes (fase 0.5)
 
-### 3. Granola: API key para el cron desatendido
+### 4. Granola: API key para el cron desatendido
 
 **El conector MCP ya funciona y alcanza para leer.** Verificado el 12-oct-26: cuenta
 `ezequiel@fidi.money`, workspace Fidi, scopes `personal` y `public`, 69 reuniones en los
@@ -125,17 +140,17 @@ Si elegís A, los pasos son: Granola → Settings → Connectors → API keys �
 
 ## Decisiones que necesitan tu ojo
 
-### 4. Dominio de `ALLOWED_SIGN_IN`
+### 5. Dominio de `ALLOWED_SIGN_IN`
 
 Está en `"fidi.money,fidi.cl"` porque tu mail de trabajo es `@fidi.money` pero el plan
 hablaba de `fidi.cl`. **Es el modelo de autorización completo**: si sobra uno, sacarlo.
 
-### 5. Cuál GTM Consorcio Targets
+### 6. Cuál GTM Consorcio Targets
 
 Hay dos databases con ese nombre en Notion, con data sources distintos. Mirar cuál vale
 antes de la fase 3. El extract baja las dos igual.
 
-### 6. Notion: marcar obsoletas las versiones viejas
+### 7. Notion: marcar obsoletas las versiones viejas
 
 Para que nadie las lea como vigentes:
 
@@ -145,7 +160,7 @@ Para que nadie las lea como vigentes:
 
 La fuente única es `docs/forecast-model.md` en este repo.
 
-### 7. Token de integración de Notion
+### 8. Token de integración de Notion
 
 Para la fase 3. Crear una integración interna y compartirle las 8 databases del
 teamspace. `NOTION_TOKEN` va **solo en `.env` local, nunca en Vercel**: la extracción
@@ -153,7 +168,7 @@ corre una vez desde tu máquina.
 
 ## Para producción, más adelante
 
-### 8. Google OAuth
+### 9. Google OAuth
 
 **No hace falta para desarrollar.** Para entrar localmente:
 

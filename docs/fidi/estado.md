@@ -67,9 +67,34 @@ round-trips a us-east-1, y con 37 archivos en paralelo contra una sola base los
 timeouts de 5s se disparan y el estado compartido entre archivos se pisa. Tampoco es
 cuota: el proyecto lleva 352 segundos de compute consumidos de un plan `free_v3`.
 
-**El gate real de la API es CI**, que levanta `postgres:17-alpine` como service y
-corre todo contra localhost. Lo que sí vale localmente: los tests de paquete (forecast,
-db, telemetry, auth, env, validation) y los archivos de API de a uno.
+**Y CI tampoco está corriendo.** El workflow existe y levanta `postgres:17-alpine` como
+service, pero el fork tiene **cero runs en toda su historia**: GitHub deshabilita los
+workflows en los forks hasta que alguien los habilita a mano en la pestaña Actions.
+Hasta que eso pase, **no hay ningún gate automático sobre esta rama**.
+
+**Cómo correr la suite de la API desde una máquina lejos de la base.** Dos cambios, y
+los dos están medidos:
+
+```bash
+cd apps/api
+for f in test/*.spec.ts; do bun test --timeout 30000 "./$f"; done
+```
+
+**De a un archivo**, no todos en paralelo: eso bajó las fallas de 42 a 11. Y con
+**timeout de 30s** en vez de los 5s por defecto, porque un test de integración hace
+decenas de round-trips y contra us-east-1 cada uno cuesta ~150ms.
+
+**Cada suite necesita su propia base.** Las dos fallas que quedaban eran contaminación
+cruzada: `enrichment-queue` cuenta filas y veía las de corridas anteriores. Hay una base
+por suite en el branch `dev`: `crm_pkg_test` para los paquetes y `crm_api_test` para la
+API. `TEST_DATABASE_URL` tiene que terminar en `_test`, que el repo lo valida.
+
+Un spec se niega a borrar filas que no creó, con un mensaje que lo explica: *"that is
+somebody's access"*. Es la decisión correcta y por eso la salida es una base limpia, no
+un `DELETE`.
+
+Con esas tres condiciones la suite de la API cierra en **393 tests, 0 fallas**. O sea
+que las 42 fallas del modo paralelo eran todas del entorno, ninguna del código.
 
 La otra salida está documentada arriba: la VM de las sesiones de nube trae **PostgreSQL
 16 local**, y apuntar `crm_test` ahí elimina la red del problema.
