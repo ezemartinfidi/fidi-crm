@@ -250,17 +250,19 @@ const TITLES = [
 ] as const;
 
 const OPEN_STAGES = [
-	DealStage.DEMO_BOOKED,
-	DealStage.QUALIFIED_TO_BUY,
-	DealStage.DECISION_MAKER_BOUGHT_IN,
-	DealStage.CONTRACT_SENT,
+	DealStage.LEAD,
+	DealStage.QUALIFIED,
+	DealStage.DISCOVERY,
+	DealStage.PROPOSAL,
+	DealStage.NEGOTIATION,
 ] as const;
 
-const CLOSED_STAGES = [
-	DealStage.CLOSED_WON,
-	DealStage.CLOSED_LOST,
-	DealStage.UNQUALIFIED_TO_BUY,
-] as const;
+const CLOSED_STAGES = [DealStage.WON, DealStage.LOST] as const;
+
+// STAND_BY no entra en el reparto aleatorio: se siembra a proposito mas abajo,
+// para que siempre haya al menos un deal pausado con el que probar que no
+// aparece en el pipeline abierto ni dispara alertas.
+const PAUSED_STAGE = DealStage.STAND_BY;
 
 const DEAL_DESCRIPTIONS = [
 	"Replacing a spreadsheet-and-Drive evidence process before their first SOC 2 audit. Security owns the decision, finance signs.",
@@ -796,8 +798,16 @@ async function seedDeals(
 
 		for (let n = 0; n < count; n++) {
 			const id = `seed-deal-${slug(company.name)}-${n}`;
-			const closed = chance(0.35);
-			const stage = closed ? pick(CLOSED_STAGES) : pick(OPEN_STAGES);
+			// El primer deal de la primera empresa queda pausado a proposito, para
+			// que los datos de demo ejerciten el tercer estado: ni abierto ni
+			// cerrado. Sin uno, STAND_BY solo existe en los tests.
+			const paused = index === 0 && n === 0;
+			const closed = !paused && chance(0.35);
+			const stage = paused
+				? PAUSED_STAGE
+				: closed
+					? pick(CLOSED_STAGES)
+					: pick(OPEN_STAGES);
 			const ownerId = pick(ownerIds);
 			const createdDaysAgo = integer(20, 210);
 			const createdAt = daysFromNow(-createdDaysAgo, 12);
@@ -840,11 +850,7 @@ async function seedDeals(
 							: -closedDaysAgo + integer(-4, 9),
 					),
 					closedAt: closed ? stageChangedAt : null,
-					closedReason:
-						stage === DealStage.CLOSED_LOST ||
-						stage === DealStage.UNQUALIFIED_TO_BUY
-							? pick(LOST_REASONS)
-							: null,
+					closedReason: stage === DealStage.LOST ? pick(LOST_REASONS) : null,
 					createdAt,
 				},
 				update: {},
@@ -950,8 +956,8 @@ async function seedActivities(
 			dealId: deal.id,
 			subject: "Stage changed",
 			meta: {
-				from: DealStage.DEMO_BOOKED,
-				to: deal.closed ? DealStage.CLOSED_WON : DealStage.QUALIFIED_TO_BUY,
+				from: DealStage.LEAD,
+				to: deal.closed ? DealStage.WON : DealStage.QUALIFIED,
 			},
 		});
 	}

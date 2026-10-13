@@ -4,9 +4,11 @@ export interface CurrencyMeta {
 	minorUnits: number;
 }
 
-export const DEFAULT_REPORTING_CURRENCY = "USD";
+export const DEFAULT_REPORTING_CURRENCY = "CLP";
 
 const CURRENCY_LIST: readonly CurrencyMeta[] = [
+	// CLP has no minor unit: a peso is not divisible into cents.
+	{ code: "CLP", name: "Chilean Peso", minorUnits: 0 },
 	{ code: "USD", name: "US Dollar", minorUnits: 2 },
 	{ code: "EUR", name: "Euro", minorUnits: 2 },
 	{ code: "JPY", name: "Japanese Yen", minorUnits: 0 },

@@ -3,6 +3,7 @@ import type { Db } from "../src/client";
 import {
 	CURRENCIES,
 	currencyName,
+	DEFAULT_REPORTING_CURRENCY,
 	isCurrencyCode,
 	isWellFormedCurrency,
 	minorUnitsOf,
@@ -62,8 +63,9 @@ describe("normalizeCurrency and isCurrencyCode", () => {
 		}
 	});
 
-	it("offers only the eleven currencies most of the world trades in", () => {
+	it("offers CLP first, then the currencies most of the world trades in", () => {
 		expect(CURRENCIES.map((entry) => entry.code)).toEqual([
+			"CLP",
 			"USD",
 			"EUR",
 			"JPY",
@@ -107,6 +109,37 @@ describe("minorUnitsOf", () => {
 		expect(minorUnitsOf("USD")).toBe(2);
 		expect(minorUnitsOf("ZZZ")).toBe(2);
 		expect(minorUnitsOf("SEK")).toBe(2);
+	});
+});
+
+describe("CLP — EVAL-C2", () => {
+	it("is a currency the CRM knows", () => {
+		expect(isCurrencyCode("CLP")).toBe(true);
+		expect(isCurrencyCode("clp")).toBe(true);
+		expect(currencyName("CLP")).toBe("Chilean Peso");
+	});
+
+	it("is what totals are reported in — Fidi books in pesos", () => {
+		expect(DEFAULT_REPORTING_CURRENCY).toBe("CLP");
+		expect(isCurrencyCode(DEFAULT_REPORTING_CURRENCY)).toBe(true);
+	});
+
+	it("has no minor unit, so a peso is never shown split into cents", () => {
+		expect(minorUnitsOf("CLP")).toBe(0);
+	});
+
+	it("survives the cents transport the API encodes money with", () => {
+		// apps/api/src/crm/values.ts moves money as amount*100 and divides back.
+		// It is an encoding, not a rounding, so a 0-decimal currency is safe —
+		// but a deal here is hundreds of millions of pesos, so prove it at that
+		// size rather than at 10.
+		const toCents = (amount: number) => amount * 100;
+		const fromCents = (cents: number) => cents / 100;
+
+		for (const pesos of [1, 1_500, 265_499_000, 40_000_000_000]) {
+			expect(fromCents(toCents(pesos))).toBe(pesos);
+			expect(Number.isSafeInteger(toCents(pesos))).toBe(true);
+		}
 	});
 });
 

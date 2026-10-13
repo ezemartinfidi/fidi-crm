@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { AgentPanel } from "@/components/crm/agent-panel";
 import { InlineCompanyField } from "@/components/crm/company-picker";
 import { contactName } from "@/components/crm/contact-name";
+import { DealProducts } from "@/components/crm/deal-products";
 import { FieldsCog, RecordFields } from "@/components/crm/fields/record-fields";
 import {
 	InlineDateField,
@@ -347,6 +348,11 @@ function DealOverview({ deal }: { deal: Deal }) {
 							label: user.name,
 						}))}
 						onSave={(ownerId) => save({ ownerId })}
+					/>
+					<DealProducts
+						dealId={deal.id}
+						selected={deal.products ?? []}
+						onSaved={() => cache.deal(deal.id, { settle: "record" })}
 					/>
 					<RecordFields
 						fields={deal.fields}

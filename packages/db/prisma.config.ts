@@ -11,5 +11,13 @@ export default defineConfig({
 	},
 	datasource: {
 		url: env("DATABASE_URL"),
+		// Solo la necesitan `migrate dev` y diffear el directorio de
+		// migraciones, asi que se lee de process.env y no con `env()`, que la
+		// volveria obligatoria y rompria `db:generate` y el build de CI para
+		// todos los que no la tengan configurada.
+		//
+		// Prisma la borra y la reconstruye en cada corrida. Nunca apuntarla a
+		// una base con datos.
+		shadowDatabaseUrl: process.env.SHADOW_DATABASE_URL,
 	},
 });

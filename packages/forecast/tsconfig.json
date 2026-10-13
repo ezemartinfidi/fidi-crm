@@ -1,0 +1,13 @@
+{
+	"$schema": "https://json.schemastore.org/tsconfig",
+	"extends": "@crm/typescript-config/internal-package.json",
+	"compilerOptions": {
+		"types": ["node", "bun"]
+	},
+	// Los tests entran al typecheck: son el principal consumidor de estos
+	// tipos, y dejarlos afuera deja pasar errores reales. Un campo nuevo que
+	// un helper de test no setea llega como undefined y propaga NaN hasta un
+	// monto, que es un error que no falla sino que se muestra.
+	"include": ["src/**/*.ts", "test/**/*.ts"],
+	"exclude": ["node_modules"]
+}

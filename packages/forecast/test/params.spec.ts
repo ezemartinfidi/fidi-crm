@@ -1,0 +1,95 @@
+import { describe, expect, it } from "bun:test";
+import { ENGINE_VERSION } from "../src/index";
+import {
+	forecastParamsSchema,
+	paramsChecksum,
+	parseParams,
+	V3_PARAMS,
+	V3_PARAMS_INPUT,
+} from "../src/params";
+
+describe("los parametros v3", () => {
+	it("son los del bloque JSON del 12-ago, no los de julio", () => {
+		expect(V3_PARAMS.tpmAnual.toString()).toBe("0.045"); // era 4,75%
+		expect(V3_PARAMS.mesesDeSetupDefaultCv).toBe(2); // la pagina de julio decia 3
+		expect(V3_PARAMS.costoPctRevenueVariable.toString()).toBe("0.3");
+	});
+
+	// El margen de CV es un PLACEHOLDER, no una decision. Por eso este test fija
+	// la relacion que lo hace coherente y no el numero: mientras el margen sea el
+	// complemento del costo variable, el componente cierra. Cuando se defina el
+	// valor real, lo que tiene que seguir pasando es esto, no que siga en 0,7.
+	it("mantienen el margen de CV coherente con el costo variable", () => {
+		expect(
+			V3_PARAMS.costoPctRevenueVariable
+				.plus(V3_PARAMS.margenesBrutos.cvFee)
+				.toString(),
+		).toBe("1");
+	});
+
+	it("tienen cuatro tramos de rev share y el ultimo es abierto", () => {
+		const tramos = V3_PARAMS.revShareTramos;
+		expect(tramos).toHaveLength(4);
+		expect(tramos.at(-1)?.hastaClp).toBeNull();
+		expect(tramos.at(-1)?.pctTpm.toString()).toBe("0.35");
+	});
+
+	it("cubren los tramos de tarifa de 1 a infinito, sin huecos ni solapes", () => {
+		const tramos = V3_PARAMS.tarifaTramos;
+		expect(tramos[0]?.desde).toBe(1);
+		expect(tramos.at(-1)?.hasta).toBeNull();
+
+		for (let i = 1; i < tramos.length; i++) {
+			const previo = tramos[i - 1];
+			const actual = tramos[i];
+			if (!previo || !actual || previo.hasta === null) continue;
+			expect(actual.desde).toBe(previo.hasta + 1);
+		}
+	});
+
+	it("rechazan una moneda que no sea CLP", () => {
+		// Contra el schema directo, que es el borde donde el valor es desconocido.
+		expect(() =>
+			forecastParamsSchema.parse({ ...V3_PARAMS_INPUT, moneda: "USD" }),
+		).toThrow();
+	});
+});
+
+describe("el checksum", () => {
+	it("es estable: el mismo modelo da el mismo hash", () => {
+		expect(paramsChecksum(V3_PARAMS)).toBe(paramsChecksum(V3_PARAMS));
+	});
+
+	it("describe el modelo, no como se escribio el JSON", () => {
+		// Mismo valor, distinta representacion: numero en vez de string, y las
+		// claves en otro orden. Parsea al mismo modelo, asi que el hash no cambia.
+		const otroOrden = Object.fromEntries(
+			Object.entries({ ...V3_PARAMS_INPUT, tpmAnual: 0.045 }).reverse(),
+		);
+		// Se parsea con el schema y no con parseParams: fromEntries devuelve un
+		// indice generico, que es justo el caso de "forma desconocida" para el
+		// que existe el borde de I/O.
+		expect(paramsChecksum(forecastParamsSchema.parse(otroOrden))).toBe(
+			paramsChecksum(V3_PARAMS),
+		);
+	});
+
+	it("cambia si cambia un parametro, que es de lo que sirve", () => {
+		const tocado = parseParams({ ...V3_PARAMS_INPUT, tpmAnual: "0.0475" });
+		expect(paramsChecksum(tocado)).not.toBe(paramsChecksum(V3_PARAMS));
+	});
+
+	it("distingue un cambio adentro de un tramo", () => {
+		const tramos = V3_PARAMS_INPUT.tarifaTramos.map((t, i) =>
+			i === 0 ? { ...t, rateClp: "761" } : t,
+		);
+		const tocado = parseParams({ ...V3_PARAMS_INPUT, tarifaTramos: tramos });
+		expect(paramsChecksum(tocado)).not.toBe(paramsChecksum(V3_PARAMS));
+	});
+});
+
+describe("la version del motor", () => {
+	it("esta declarada, porque un ForecastRun la guarda", () => {
+		expect(ENGINE_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+	});
+});

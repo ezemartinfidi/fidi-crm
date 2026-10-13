@@ -26,6 +26,7 @@
 		"@crm/auth": "workspace:*",
 		"@crm/db": "workspace:*",
 		"@crm/env": "workspace:*",
+		"@crm/forecast": "workspace:*",
 		"@crm/telemetry": "workspace:*",
 		"@crm/validation": "workspace:*",
 		"@keyv/redis": "^5.1.6",
